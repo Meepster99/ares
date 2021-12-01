@@ -28,10 +28,13 @@
   return self;
 }
 
--(void) dealloc {
-  [content release];
-  [font release];
-  [super dealloc];
+-(void) setUsesSidebarStyle:(bool)usesSidebarStyle {
+  content.selectionHighlightStyle = usesSidebarStyle? NSTableViewSelectionHighlightStyleSourceList : NSTableViewSelectionHighlightStyleRegular;
+  self.borderType = usesSidebarStyle? NSNoBorder : NSBezelBorder;
+}
+
+-(bool) usesSidebarStyle {
+  return content.selectionHighlightStyle == NSTableViewSelectionHighlightStyleSourceList;
 }
 
 -(CocoaTableViewContent*) content {
@@ -44,13 +47,11 @@
 
 -(void) setFont:(NSFont*)fontPointer {
   if(!fontPointer) fontPointer = [NSFont systemFontOfSize:12];
-  [fontPointer retain];
-  if(font) [font release];
   font = fontPointer;
 
   u32 fontHeight = hiro::pFont::size(font, " ").height();
   [content setFont:font];
-  [content setRowHeight:fontHeight];
+  [content setRowHeight:fontHeight + 4];
   [self reloadColumns];
   tableView->resizeColumns();
 }
@@ -179,6 +180,20 @@
   return nil;
 }
 
+- (void)drawRect:(NSRect)dirtyRect
+{
+  [super drawRect:dirtyRect];
+  if(((CocoaTableView*)self.enclosingScrollView).usesSidebarStyle) {
+    NSRect frame = self.bounds;
+    frame.origin.x += frame.size.width - 1;
+    frame.size.width = 1;
+    if(@available(macOS 10.14, *)) [[NSColor separatorColor] set];
+    else if (@available(macOS 10.10, *)) [[NSColor secondaryLabelColor] set];
+    else [[NSColor shadowColor] set];
+    [NSBezierPath fillRect:frame];
+  }
+}
+
 @end
 
 @implementation CocoaTableViewCell : NSCell
@@ -191,6 +206,7 @@
     [buttonCell setControlSize:NSSmallControlSize];
     [buttonCell setRefusesFirstResponder:YES];
     [buttonCell setTarget:self];
+    textCell = [[NSTextFieldCell alloc] init];
   }
   return self;
 }
@@ -200,18 +216,10 @@
   return [[self objectValue] objectForKey:@"text"];
 }
 
--(void) drawWithFrame:(NSRect)frame inView:(NSView*)view {
+-(void) drawWithFrame:(NSRect)frame inView:(NSView*)_view {
+  NSTableView* view = (NSTableView*)_view;
   if(auto tableViewItem = tableView->item([view rowAtPoint:frame.origin])) {
     if(auto tableViewCell = tableViewItem->cell([view columnAtPoint:frame.origin])) {
-      NSColor* backgroundColor = nil;
-      if([self isHighlighted]) backgroundColor = [NSColor alternateSelectedControlColor];
-      else if(!tableView->enabled(true)) backgroundColor = [NSColor controlBackgroundColor];
-      else if(auto color = tableViewCell->state.backgroundColor) backgroundColor = NSMakeColor(color);
-      else backgroundColor = [NSColor controlBackgroundColor];
-
-      [backgroundColor set];
-      [NSBezierPath fillRect:frame];
-
       if(tableViewCell->state.checkable) {
         [buttonCell setHighlighted:YES];
         [buttonCell setState:(tableViewCell->state.checked ? NSOnState : NSOffState)];
@@ -221,33 +229,33 @@
       }
 
       if(tableViewCell->state.icon) {
-        NSImage* image = NSMakeImage(tableViewCell->state.icon, frame.size.height, frame.size.height);
+        NSImage* image = NSMakeImage(tableViewCell->state.icon,
+                                     tableViewCell->state.icon.width(),
+                                     tableViewCell->state.icon.height());
         [[NSGraphicsContext currentContext] saveGraphicsState];
-        NSRect targetRect = NSMakeRect(frame.origin.x, frame.origin.y, frame.size.height, frame.size.height);
-        NSRect sourceRect = NSMakeRect(0, 0, [image size].width, [image size].height);
+        NSRect targetRect = NSMakeRect(frame.origin.x + 2, frame.origin.y + (frame.size.height - image.size.height) / 2,
+                                       image.size.width, image.size.height);
+        NSRect sourceRect = NSMakeRect(0, 0, image.size.width, image.size.height);
         [image drawInRect:targetRect fromRect:sourceRect operation:NSCompositeSourceOver fraction:1.0 respectFlipped:YES hints:nil];
         [[NSGraphicsContext currentContext] restoreGraphicsState];
-        frame.origin.x += frame.size.height + 2;
-        frame.size.width -= frame.size.height + 2;
+        frame.origin.x += image.size.width + 4;
+        frame.size.width -= image.size.width + 4;
       }
 
       if(tableViewCell->state.text) {
-        NSMutableParagraphStyle* paragraphStyle = [[NSParagraphStyle defaultParagraphStyle] mutableCopy];
-        paragraphStyle.alignment = NSTextAlignmentCenter;
-        if(tableViewCell->state.alignment.horizontal() < 0.333) paragraphStyle.alignment = NSTextAlignmentLeft;
-        if(tableViewCell->state.alignment.horizontal() > 0.666) paragraphStyle.alignment = NSTextAlignmentRight;
-        NSColor* foregroundColor = nil;
-        if([self isHighlighted]) foregroundColor = [NSColor alternateSelectedControlTextColor];
-        else if(!tableView->enabled(true)) foregroundColor = [NSColor disabledControlTextColor];
-        else if(auto color = tableViewCell->state.foregroundColor) foregroundColor = NSMakeColor(color);
-        else foregroundColor = [NSColor textColor];
-        NSString* text = [NSString stringWithUTF8String:tableViewCell->state.text];
-        [text drawInRect:frame withAttributes:@{
-          NSBackgroundColorAttributeName:backgroundColor,
-          NSForegroundColorAttributeName:foregroundColor,
-          NSFontAttributeName:hiro::pFont::create(tableViewCell->font(true)),
-          NSParagraphStyleAttributeName:paragraphStyle
-        }];
+        textCell.stringValue = @((const char*)tableViewCell->state.text);
+        textCell.alignment = NSTextAlignmentCenter;
+        textCell.backgroundStyle = self.backgroundStyle;
+        textCell.font = hiro::pFont::create(tableViewCell->font(true));
+        if(tableViewCell->state.alignment.horizontal() < 0.333) textCell.alignment = NSTextAlignmentLeft;
+        if(tableViewCell->state.alignment.horizontal() > 0.666) textCell.alignment = NSTextAlignmentRight;
+        textCell.textColor = nil;
+        if(![self isHighlighted] && tableView->enabled(true)) {
+          auto systemColor = tableViewCell->state.foregroundSystemColor;
+          if(systemColor != hiro::SystemColor::None) textCell.textColor = NSMakeColor(systemColor);
+          else if(auto color = tableViewCell->state.foregroundColor) textCell.textColor = NSMakeColor(color);
+        }
+        [textCell drawWithFrame:frame inView:view];
       }
     }
   }
@@ -266,7 +274,8 @@
 
 //I am unable to get startTrackingAt:, continueTracking:, stopTracking: to work
 //so instead, I have to run a modal loop on events until the mouse button is released
--(BOOL) trackMouse:(NSEvent*)event inRect:(NSRect)frame ofView:(NSView*)view untilMouseUp:(BOOL)flag {
+-(BOOL) trackMouse:(NSEvent*)event inRect:(NSRect)frame ofView:(NSView*)_view untilMouseUp:(BOOL)flag {
+  NSTableView* view = (NSTableView*)_view;
   if([event type] == NSLeftMouseDown) {
     NSWindow* window = [view window];
     NSEvent* nextEvent;
@@ -298,79 +307,64 @@
 namespace hiro {
 
 auto pTableView::construct() -> void {
-  @autoreleasepool {
-    cocoaView = cocoaTableView = [[CocoaTableView alloc] initWith:self()];
-    pWidget::construct();
+  cocoaView = cocoaTableView = [[CocoaTableView alloc] initWith:self()];
+  pWidget::construct();
 
-    setAlignment(state().alignment);
-    setBackgroundColor(state().backgroundColor);
-    setBatchable(state().batchable);
-    setBordered(state().bordered);
-    setFont(self().font(true));
-    setForegroundColor(state().foregroundColor);
-    setHeadered(state().headered);
-    setSortable(state().sortable);
-  }
+  setAlignment(state().alignment);
+  setBackgroundColor(state().backgroundColor);
+  setBatchable(state().batchable);
+  setBordered(state().bordered);
+  setFont(self().font(true));
+  setForegroundColor(state().foregroundColor);
+  setHeadered(state().headered);
+  setSortable(state().sortable);
 }
 
 auto pTableView::destruct() -> void {
-  @autoreleasepool {
-    [cocoaView removeFromSuperview];
-    [cocoaView release];
-  }
+  [cocoaView removeFromSuperview];
 }
 
 auto pTableView::append(sTableViewColumn column) -> void {
-  @autoreleasepool {
-    [cocoaView reloadColumns];
-    resizeColumns();
-  }
+  [(CocoaTableView*)cocoaView reloadColumns];
+  resizeColumns();
 }
 
 auto pTableView::append(sTableViewItem item) -> void {
-  @autoreleasepool {
-    [[cocoaView content] reloadData];
-  }
+  [[(CocoaTableView*)cocoaView content] reloadData];
 }
 
 auto pTableView::remove(sTableViewColumn column) -> void {
-  @autoreleasepool {
-    [cocoaView reloadColumns];
-    resizeColumns();
-  }
+  [(CocoaTableView*)cocoaView reloadColumns];
+  resizeColumns();
 }
 
 auto pTableView::remove(sTableViewItem item) -> void {
-  @autoreleasepool {
-    [[cocoaView content] reloadData];
-  }
+  [[(CocoaTableView*)cocoaView content] reloadData];
 }
 
 auto pTableView::resizeColumns() -> void {
-  @autoreleasepool {
-    vector<s32> widths;
-    s32 minimumWidth = 0;
-    s32 expandable = 0;
-    for(u32 column : range(self().columnCount())) {
-      s32 width = _width(column);
-      widths.append(width);
-      minimumWidth += width;
-      if(state().columns[column]->expandable()) expandable++;
-    }
+  vector<s32> widths;
+  s32 minimumWidth = 0;
+  s32 expandable = 0;
+  for(u32 column : range(self().columnCount())) {
+    s32 width = _width(column);
+    widths.append(width);
+    minimumWidth += width;
+    if(state().columns[column]->expandable()) expandable++;
+  }
 
-    s32 maximumWidth = self().geometry().width() - 18;  //include margin for vertical scroll bar
-    s32 expandWidth = 0;
-    if(expandable && maximumWidth > minimumWidth) {
-      expandWidth = (maximumWidth - minimumWidth) / expandable;
-    }
+  s32 maximumWidth = self().geometry().width() - 18;  //include margin for vertical scroll bar
+  s32 expandWidth = 0;
+  if(expandable && maximumWidth > minimumWidth) {
+    expandWidth = (maximumWidth - minimumWidth) / expandable;
+  }
 
-    for(u32 column : range(self().columnCount())) {
-      if(auto self = state().columns[column]->self()) {
-        s32 width = widths[column];
-        if(self->state().expandable) width += expandWidth;
-        NSTableColumn* tableColumn = [[cocoaView content] tableColumnWithIdentifier:[[NSNumber numberWithInteger:column] stringValue]];
-        [tableColumn setWidth:width];
-      }
+  for(u32 column : range(self().columnCount())) {
+    if(auto self = state().columns[column]->self()) {
+      s32 width = widths[column];
+      if(self->state().expandable) width += expandWidth;
+      NSTableColumn* tableColumn = [[(CocoaTableView*)cocoaView content] tableColumnWithIdentifier:[[NSNumber numberWithInteger:column] stringValue]];
+      [tableColumn setWidth:width];
     }
   }
 }
@@ -382,9 +376,7 @@ auto pTableView::setBackgroundColor(Color color) -> void {
 }
 
 auto pTableView::setBatchable(bool batchable) -> void {
-  @autoreleasepool {
-    [[cocoaView content] setAllowsMultipleSelection:(batchable ? YES : NO)];
-  }
+  [[(CocoaTableView*)cocoaView content] setAllowsMultipleSelection:(batchable ? YES : NO)];
 }
 
 auto pTableView::setBordered(bool bordered) -> void {
@@ -392,32 +384,30 @@ auto pTableView::setBordered(bool bordered) -> void {
 
 auto pTableView::setEnabled(bool enabled) -> void {
   pWidget::setEnabled(enabled);
-  @autoreleasepool {
-    [[cocoaView content] setEnabled:enabled];
-  }
+  [[(CocoaTableView*)cocoaView content] setEnabled:enabled];
 }
 
 auto pTableView::setFont(const Font& font) -> void {
-  @autoreleasepool {
-    [cocoaView setFont:pFont::create(font)];
-  }
+  [(CocoaTableView*)cocoaView setFont:pFont::create(font)];
 }
 
 auto pTableView::setForegroundColor(Color color) -> void {
 }
 
 auto pTableView::setHeadered(bool headered) -> void {
-  @autoreleasepool {
-    if(headered) {
-      [[cocoaView content] setHeaderView:[[[NSTableHeaderView alloc] init] autorelease]];
-    } else {
-      [[cocoaView content] setHeaderView:nil];
-    }
+  if(headered) {
+    [[(CocoaTableView*)cocoaView content] setHeaderView:[[NSTableHeaderView alloc] init]];
+  } else {
+    [[(CocoaTableView*)cocoaView content] setHeaderView:nil];
   }
 }
 
 auto pTableView::setSortable(bool sortable) -> void {
   //TODO
+}
+
+auto pTableView::setUsesSidebarStyle(bool usesSidebarStyle) -> void {
+  ((CocoaTableView*)cocoaView).usesSidebarStyle = usesSidebarStyle;
 }
 
 auto pTableView::_cellWidth(u32 row, u32 column) -> u32 {
@@ -467,17 +457,13 @@ auto pTableView::_width(u32 column) -> u32 {
 
 /*
 auto pTableView::setSelected(bool selected) -> void {
-  @autoreleasepool {
-    if(selected == false) {
-      [[cocoaView content] deselectAll:nil];
-    }
+  if(selected == false) {
+    [[cocoaView content] deselectAll:nil];
   }
 }
 
 auto pTableView::setSelection(u32 selection) -> void {
-  @autoreleasepool {
-    [[cocoaView content] selectRowIndexes:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(selection, 1)] byExtendingSelection:NO];
-  }
+  [[cocoaView content] selectRowIndexes:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(selection, 1)] byExtendingSelection:NO];
 }
 */
 

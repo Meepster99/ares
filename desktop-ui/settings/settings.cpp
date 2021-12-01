@@ -112,7 +112,7 @@ auto Settings::process(bool load) -> void {
     bind(string, name, recent.game[index]);
   }
 
-  for(u32 index : range(2)) {
+  for(u32 index : range(5)) {
     auto& port = virtualPorts[index];
     for(auto& input : port.pad.inputs) {
       string name = {"VirtualPad", 1 + index, "/", input.name}, value;
@@ -163,7 +163,7 @@ SettingsWindow::SettingsWindow() {
     hotkeySettings.setVisible(false);
   });
 
-  layout.setPadding(5_sx, 5_sy);
+  panelContainer.setPadding(5_sx, 5_sy);
 
   panelList.append(ListViewItem().setText("Video").setIcon(Icon::Device::Display));
   panelList.append(ListViewItem().setText("Audio").setIcon(Icon::Device::Speaker));
@@ -174,6 +174,7 @@ SettingsWindow::SettingsWindow() {
   panelList.append(ListViewItem().setText("Firmware").setIcon(Icon::Emblem::Binary));
   panelList.append(ListViewItem().setText("Paths").setIcon(Icon::Emblem::Folder));
   panelList.append(ListViewItem().setText("Drivers").setIcon(Icon::Place::Settings));
+  panelList->setUsesSidebarStyle();
   panelList.onChange([&] { eventChange(); });
 
   panelContainer.append(videoSettings, Size{~0, ~0});
@@ -202,6 +203,7 @@ SettingsWindow::SettingsWindow() {
   setTitle("Configuration");
   setSize({700_sx, 405_sy});
   setAlignment({0.0, 1.0});
+  setResizable(false);
 }
 
 auto SettingsWindow::show(const string& panel) -> void {

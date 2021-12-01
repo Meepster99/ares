@@ -5,6 +5,10 @@ struct CPU : M68000, Thread {
   Memory::Readable<n16> tmss;
   Memory::Writable<n16> ram;
 
+  // Bus locking is unavailable for the main cpu of MegaDrive models 1 & 2,
+  // preventing the TAS instruction from working correctly in most cases.
+  auto lockable() -> bool override { return false; }
+
   struct Debugger {
     //debugger.cpp
     auto load(Node::Object) -> void;
@@ -43,7 +47,7 @@ struct CPU : M68000, Thread {
   auto power(bool reset) -> void;
 
   //bus.cpp
-  auto read(n1 upper, n1 lower, n24 address, n16 data = 0) -> n16 override;
+  auto read(n1 upper, n1 lower, n24 address, n16 _ = 0) -> n16 override;
   auto write(n1 upper, n1 lower, n24 address, n16 data) -> void override;
 
   //io.cpp
@@ -69,6 +73,9 @@ struct CPU : M68000, Thread {
   struct State {
     n32 interruptPending;
   } state;
+
+  int cyclesUntilSync = 0;
+  int minCyclesBetweenSyncs = 0;
 };
 
 extern CPU cpu;

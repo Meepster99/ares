@@ -1,6 +1,6 @@
 struct Famicom : Cartridge {
   auto name() -> string override { return "Famicom"; }
-  auto extensions() -> vector<string> override { return {"fc", "nes", "unif"}; }
+  auto extensions() -> vector<string> override { return {"fc", "nes", "unf", "unif"}; }
   auto load(string location) -> bool override;
   auto save(string location) -> bool override;
   auto analyze(vector<u8>& data) -> string;
@@ -30,6 +30,8 @@ auto Famicom::load(string location) -> bool {
   pak->setAttribute("region", document["game/region"].string());
   pak->setAttribute("board", document["game/board"].string());
   pak->setAttribute("mirror", document["game/board/mirror/mode"].string());
+  pak->setAttribute("chip", document["game/board/chip/type"].string());
+  pak->setAttribute("chip/key", document["game/board/chip/key"].string());
   pak->setAttribute("pinout/a0", document["game/board/chip/pinout/a0"].natural());
   pak->setAttribute("pinout/a1", document["game/board/chip/pinout/a1"].natural());
   pak->append("manifest.bml", manifest);
@@ -41,6 +43,10 @@ auto Famicom::load(string location) -> bool {
   }
   if(auto node = document["game/board/memory(type=ROM,content=Program)"]) {
     pak->append("program.rom", {view.data(), node["size"].natural()});
+    view += node["size"].natural();
+  }
+  if(auto node = document["game/board/memory(type=ROM,content=Option)"]) {
+    pak->append("option.rom", {view.data(), node["size"].natural()});
     view += node["size"].natural();
   }
   if(auto node = document["game/board/memory(type=ROM,content=Character)"]) {
@@ -124,6 +130,10 @@ auto Famicom::analyzeFDS(vector<u8>& data) -> string {
 
 //iNES
 auto Famicom::analyzeINES(vector<u8>& data) -> string {
+  string hash = Hash::SHA256({data.data() + 16, data.size() - 16}).digest();
+  string manifest = Medium::manifestDatabase(hash);
+  if(manifest) return manifest;
+
   u32 mapper = ((data[7] >> 4) << 4) | (data[6] >> 4);
   u32 mirror = ((data[6] & 0x08) >> 2) | (data[6] & 0x01);
   u32 prgrom = data[4] * 0x4000;
@@ -131,7 +141,6 @@ auto Famicom::analyzeINES(vector<u8>& data) -> string {
   u32 prgram = 0u;
   u32 chrram = chrrom == 0u ? 8192u : 0u;
   u32 eeprom = 0u;
-  string hash = Hash::SHA256({data.data() + 16, data.size() - 16}).digest();
 
   string s;
   s += "game\n";
@@ -139,31 +148,6 @@ auto Famicom::analyzeINES(vector<u8>& data) -> string {
   s +={"  name:   ", Medium::name(location), "\n"};
   s +={"  title:  ", Medium::name(location), "\n"};
   s += "  region: NTSC-J, NTSC-U, PAL\n";  //database required to detect region
-
-  //Family BASIC (Japan)
-  if(hash == "c8c0b6c21bdda7503bab7592aea0f945a0259c18504bb241aafb1eabe65846f3") {
-    prgram = 8_KiB;
-  }
-
-  //Gauntlet (USA)
-  if(hash == "fd2a8520314fb183e15fd62f48df97f92eb9c81140da4e6ab9ff0386e4797071") {
-    mapper = 206;
-  }
-
-  //Gauntlet (USA) [Unlicensed]
-  if(hash == "67b8a39744807dd740bdebcfe3d33bdac11a4d47b4807c0ffd35e322f8d670c2") {
-    mapper = 206;
-  }
-
-  //Jajamaru Gekimaden: Maboroshi no Kinmajou (Japan)
-  if(hash == "ea770788f68e4bb089e4205807931d64b83175a0106e7563d0a6d3ebac369991") {
-    prgram = 8_KiB;
-  }
-
-  //Mezase Top Pro: Green ni Kakeru Yume (Japan)
-  if(hash == "32c6893e0f8a14714dd2082803cfde62f8981010d23fc9cf00a5a18066d063cb") {
-    prgram = 8_KiB;
-  }
 
   switch(mapper) {
 
@@ -221,38 +205,65 @@ auto Famicom::analyzeINES(vector<u8>& data) -> string {
     prgram = 8192;
     break;
 
+  case  11:
+    s += "  board:  COLORDREAMS-74*377\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
+    break;
+
+  case  13:
+    s += "  board:  HVC-CPROM\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
+    chrram = 16384;
+    break;
+
   case  16:
-    s += "  board:  BANDAI-FCG\n";
+    s += "  board:  BANDAI-LZ93D50\n";
     s += "    chip type=LZ93D50\n";
-    eeprom = 128;
+    eeprom = 256;
     break;
 
   case  18:
-    s += "  board:  JALECO-JF\n";
+    s += "  board:  JALECO-JF-23A\n";
     s += "    chip type=SS88006\n";
     break;
 
+  case  19:
+    s += "  board:  NAMCO-163\n";
+    s += "    chip type=163\n";
+    prgram = 8192;
+    break;
+
   case  21:
-  case  23:
-  case  25:
-    //VRC4
     s += "  board:  KONAMI-VRC-4\n";
     s += "    chip type=VRC4\n";
-    s += "      pinout a0=1 a1=0\n";
+    s += "      pinout a0=1 a1=2\n";
     prgram = 8192;
     break;
 
   case  22:
-    //VRC2
+    s += "  board:  KONAMI-VRC-2A\n";
+    s += "    chip type=VRC2\n";
+    s += "      pinout a0=1 a1=0\n";
+    break;
+
+  case  23:
     s += "  board:  KONAMI-VRC-2\n";
     s += "    chip type=VRC2\n";
     s += "      pinout a0=0 a1=1\n";
+    prgram = 8192;
     break;
 
   case  24:
     s += "  board:  KONAMI-VRC-6\n";
     s += "    chip type=VRC6\n";
     s += "      pinout a0=0 a1=1\n";
+    break;
+
+  case  25:
+    s += "  board:  KONAMI-VRC-4\n";
+    s += "    chip type=VRC4\n";
+    s += "      pinout a0=1 a1=0\n";
+    prgram = 8192;
     break;
 
   case  26:
@@ -262,9 +273,30 @@ auto Famicom::analyzeINES(vector<u8>& data) -> string {
     prgram = 8192;
     break;
 
+  case  32:
+    s += "  board:  IREM-G101\n";
+    s += "    chip type=G101\n";
+    prgram = 8192;
+    break;
+
+  case  33:
+    s += "  board:  TAITO-TC0190\n";
+    s += "    chip type=TC0190\n";
+    break;
+
   case  34:
     s += "  board:  HVC-BNROM\n";
     s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
+    break;
+
+  case  48:
+    s += "  board:  TAITO-TC0690\n";
+    s += "    chip type=TC0690\n";
+    break;
+
+  case  65:
+    s += "  board:  IREM-H3001\n";
+    s += "    chip type=H3001\n";
     break;
 
   case  66:
@@ -278,10 +310,6 @@ auto Famicom::analyzeINES(vector<u8>& data) -> string {
 
   case  68:
     s += "  board:  SUNSOFT-4\n";
-    s += "    memory\n";
-    s += "      type: ROM\n";
-    s += "      size: 0x4000\n";
-    s += "      content: Option\n";
     prgram = 8192;
     break;
 
@@ -289,6 +317,16 @@ auto Famicom::analyzeINES(vector<u8>& data) -> string {
     s += "  board:  SUNSOFT-5B\n";
     s += "    chip type=5B\n";
     prgram = 8192;
+    break;
+
+  case  70:
+    s += "  board:  BANDAI-74161\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
+    break;
+
+  case  72:
+    s += "  board:  JALECO-JF-17\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
     break;
 
   case  73:
@@ -303,14 +341,63 @@ auto Famicom::analyzeINES(vector<u8>& data) -> string {
     s += "    chip type=VRC1\n";
     break;
 
+  case  76:
+    s += "  board:  NAMCO-3446\n";
+    s += "    chip type=118\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
+    break;
+
+  case  77:
+    s += "  board:  IREM-LROG017\n";
+    chrram = 8192;
+    break;
+
+  case  78:
+    s += "  board:  JALECO-JF-16\n";
+    break;
+
+  case  80:
+    s += "  board:  TAITO-X1-005\n";
+    s += "    chip type=X1-005\n";
+    prgram = 128;
+    break;
+
+  case  82:
+    s += "  board:  TAITO-X1-017\n";
+    s += "    chip type=X1-017\n";
+    prgram = 5120;
+    break;
+
   case  85:
     s += "  board:  KONAMI-VRC-7\n";
     s += "    chip type=VRC7\n";
+    s += "      pinout a0=4\n";
     prgram = 8192;
+    break;
+
+  case  86:
+    s += "  board:  JALECO-JF-13\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
+    break;
+
+  case  87:
+    s += "  board:  JALECO-JF-05\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
+    break;
+
+  case  88:
+    s += "  board:  NAMCO-3433\n";
+    s += "    chip type=118\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
     break;
 
   case  89:
     s += "  board:  SUNSOFT-2\n";
+    break;
+
+  case  92:
+    s += "  board:  JALECO-JF-19\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
     break;
 
   case  93:
@@ -318,14 +405,84 @@ auto Famicom::analyzeINES(vector<u8>& data) -> string {
     s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
     break;
 
+  case  94:
+    s += "  board:  HVC-UN1ROM\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
+    break;
+
+  case  95:
+    s += "  board:  NAMCO-3425\n";
+    s += "    chip type=118\n";
+    break;
+
+  case  96:
+    s += "  board:  BANDAI-OEKA\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
+    chrram = 32768;
+    break;
+
   case  97:
     s += "  board:  IREM-TAM-S1\n";
+    s += "    chip type=TAM-S1\n";
+    break;
+
+  case 111:
+    s += "  board:  GTROM\n";
+    break;
+
+  case 118:
+    s += "  board:  HVC-TKSROM\n";
+    s += "    chip type=MMC3B\n";
+    prgram = 8192;
+    break;
+
+  case 119:
+    s += "  board:  HVC-TQROM\n";
+    s += "    chip type=MMC3B\n";
+    chrram = 8192;
+    break;
+
+  case  140:
+    s += "  board:  JALECO-JF-11\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
+    break;
+
+  case 152:
+    s += "  board:  BANDAI-74161A\n";
+    break;
+
+  case 153:
+    s += "  board:  BANDAI-LZ93D50\n";
+    s += "    chip type=LZ93D50\n";
+    prgram = 8192;
+    break;
+
+  case 154:
+    s += "  board:  NAMCO-3453\n";
+    s += "    chip type=118\n";
+    break;
+
+  case 155:
+    s += "  board:  HVC-SXROM\n";
+    s += "    chip type=MMC1A\n";
+    prgram = 8192;
+    break;
+
+  case 157:
+    s += "  board:  BANDAI-LZ93D50\n";
+    s += "    chip type=LZ93D50\n";
+    eeprom = 256;
     break;
 
   case 159:
-    s += "  board:  BANDAI-FCG\n";
+    s += "  board:  BANDAI-LZ93D50\n";
     s += "    chip type=LZ93D50\n";
     eeprom = 128;
+    break;
+
+  case 180:
+    s += "  board:  HVC-UNROMA\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
     break;
 
   case 184:
@@ -333,11 +490,36 @@ auto Famicom::analyzeINES(vector<u8>& data) -> string {
     s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
     break;
 
-  case 206:
-    s += "  board: HVC-DRROM\n";
-    chrram = 2048;
+  case 185:
+    s += "  board:  HVC-CNROM-SEC\n";
+    s += "    chip type=SECURITY key=0x11\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
     break;
 
+  case 188:
+    s += "  board:  BANDAI-KARAOKE\n";
+    break;
+
+  case 206:
+    s += "  board:  NAMCO-118\n";
+    s += "    chip type=118\n";
+    s +={"    mirror mode=", !mirror ? "horizontal" : "vertical", "\n"};
+    break;
+
+  case 207:
+    s += "  board:  TAITO-X1-005A\n";
+    s += "    chip type=X1-005\n";
+    prgram = 128;
+    break;
+
+  case 210:
+    s += "  board:  NAMCO-340\n";
+    s += "    chip type=340\n";
+    break;
+
+  case 228:
+    s += "  board:  MLT-ACTION52\n";
+    break;
   }
 
   s += "    memory\n";

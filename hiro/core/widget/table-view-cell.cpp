@@ -86,7 +86,7 @@ auto mTableViewCell::foregroundColor(bool recursive) const -> Color {
   return state.foregroundColor;
 }
 
-auto mTableViewCell::icon() const -> image {
+auto mTableViewCell::icon() const -> multiFactorImage {
   return state.icon;
 }
 
@@ -117,11 +117,19 @@ auto mTableViewCell::setChecked(bool checked) -> type& {
 
 auto mTableViewCell::setForegroundColor(Color color) -> type& {
   state.foregroundColor = color;
+  state.foregroundSystemColor = SystemColor::None;
   signal(setForegroundColor, color);
   return *this;
 }
 
-auto mTableViewCell::setIcon(const image& icon) -> type& {
+auto mTableViewCell::setForegroundColor(SystemColor color) -> type& {
+    state.foregroundColor = color;
+    state.foregroundSystemColor = color;
+    signal(setForegroundColor, color);
+    return *this;
+}
+
+auto mTableViewCell::setIcon(const multiFactorImage& icon) -> type& {
   state.icon = icon;
   signal(setIcon, icon);
   return *this;

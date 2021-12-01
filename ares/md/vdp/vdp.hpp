@@ -1,5 +1,5 @@
 //Yamaha YM7101
-#if defined(PROFILE_PERFORMANCE)
+#if 0 //defined(PROFILE_PERFORMANCE)
 #include "../vdp-performance/vdp.hpp"
 #else
 struct VDP : Thread {
@@ -137,6 +137,9 @@ struct VDP : Thread {
       n1 pending;
       n1 transitioned;
     } vblank;
+
+    n8 delay;
+
   } irq;
 
   struct Slot {
@@ -200,7 +203,7 @@ struct VDP : Thread {
     n2  mode;
     n22 source;
     n16 length;
-    n8  data;
+    n16 data;
     n1  wait;
     n1  read;
     n1  enable;
@@ -301,8 +304,8 @@ struct VDP : Thread {
     VDP& vdp;
 
     //the per-scanline sprite limits are different between H40 and H32 modes
-    auto objectLimit() const -> u32 { return vdp.latch.displayWidth ? 20 : 16; }
-    auto tileLimit()   const -> u32 { return vdp.latch.displayWidth ? 40 : 32; }
+    auto lineObjectLimit()  const -> u32 { return vdp.latch.displayWidth ? 20 : 16; }
+    auto frameObjectLimit() const -> u32 { return vdp.latch.displayWidth ? 80 : 64; }
 
     //sprite.cpp
     auto write(n16 address, n16 data) -> void;
@@ -346,15 +349,15 @@ struct VDP : Thread {
       n1  priority;
       n9  x;
     };
-    Mapping mappings[20];
+    Mapping mappings[21];
 
     n8  mappingCount;
 
-    n9  patternX;
+    n1  maskCheck;
+    n1  maskActive;
     n8  patternIndex;
     n8  patternSlice;
     n8  patternCount;
-    n1  patternStop;
 
     n7  visible[20];
     n8  visibleLink;
@@ -487,6 +490,7 @@ private:
   } latch;
 
   struct State {
+    n16 counterLatchValue;
     n8 hcounter;
     n9 vcounter;
     n1 field;

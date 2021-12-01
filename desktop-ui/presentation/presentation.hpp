@@ -53,7 +53,10 @@ struct Presentation : Window {
       MenuCheckItem pauseEmulation{&toolsMenu};
       MenuSeparator toolsMenuSeparatorB{&toolsMenu};
       MenuItem manifestViewerAction{&toolsMenu};
+      #if !defined(PLATFORM_MACOS)
+      // Cocoa hiro is missing the hex editor widget
       MenuItem memoryEditorAction{&toolsMenu};
+      #endif
       MenuItem graphicsViewerAction{&toolsMenu};
       MenuItem streamManagerAction{&toolsMenu};
       MenuItem propertiesViewerAction{&toolsMenu};
@@ -64,9 +67,11 @@ struct Presentation : Window {
   VerticalLayout layout{this};
     HorizontalLayout viewportLayout{&layout, Size{~0, ~0}, 0};
       Viewport viewport{&viewportLayout, Size{~0, ~0}, 0};
-      VerticalLayout iconLayout{&viewportLayout, Size{138, ~0}, 0};
+      VerticalLayout iconLayout{&viewportLayout, Size{128, ~0}, 0};
         Canvas iconSpacer{&iconLayout, Size{128, ~0}, 0};
-        Canvas iconCanvas{&iconLayout, Size{128, 128}, 0};
+        HorizontalLayout iconHorizontal{&iconLayout, Size{128, 128}, 0};
+          Canvas iconCanvas{&iconHorizontal, Size{112, 128}, 0};
+          Canvas iconPadding{&iconHorizontal, Size{16, 128}, 0};
         Canvas iconBottom{&iconLayout, Size{128, 10}, 0};
     HorizontalLayout statusLayout{&layout, Size{~0, StatusHeight}, 0};
       Label spacerLeft{&statusLayout, Size{8, ~0}, 0};

@@ -2,6 +2,12 @@
 namespace Instances { Instance<Presentation> presentation; }
 Presentation& presentation = Instances::presentation();
 
+#if defined(PLATFORM_MACOS)
+#define ELLIPSIS "\u2026"
+#else
+#define ELLIPSIS " ..."
+#endif
+
 Presentation::Presentation() {
   loadMenu.setText("Load");
 
@@ -85,31 +91,31 @@ Presentation::Presentation() {
     }
     if(visible()) resizeWindow();
   }).doToggle();
-  videoSettingsAction.setText("Video ...").setIcon(Icon::Device::Display).onActivate([&] {
+  videoSettingsAction.setText("Video" ELLIPSIS).setIcon(Icon::Device::Display).onActivate([&] {
     settingsWindow.show("Video");
   });
-  audioSettingsAction.setText("Audio ...").setIcon(Icon::Device::Speaker).onActivate([&] {
+  audioSettingsAction.setText("Audio" ELLIPSIS).setIcon(Icon::Device::Speaker).onActivate([&] {
     settingsWindow.show("Audio");
   });
-  inputSettingsAction.setText("Input ...").setIcon(Icon::Device::Joypad).onActivate([&] {
+  inputSettingsAction.setText("Input" ELLIPSIS).setIcon(Icon::Device::Joypad).onActivate([&] {
     settingsWindow.show("Input");
   });
-  hotkeySettingsAction.setText("Hotkeys ...").setIcon(Icon::Device::Keyboard).onActivate([&] {
+  hotkeySettingsAction.setText("Hotkeys" ELLIPSIS).setIcon(Icon::Device::Keyboard).onActivate([&] {
     settingsWindow.show("Hotkeys");
   });
-  emulatorSettingsAction.setText("Emulators ...").setIcon(Icon::Place::Server).onActivate([&] {
+  emulatorSettingsAction.setText("Emulators" ELLIPSIS).setIcon(Icon::Place::Server).onActivate([&] {
     settingsWindow.show("Emulators");
   });
-  optionSettingsAction.setText("Options ...").setIcon(Icon::Action::Settings).onActivate([&] {
+  optionSettingsAction.setText("Options" ELLIPSIS).setIcon(Icon::Action::Settings).onActivate([&] {
     settingsWindow.show("Options");
   });
-  firmwareSettingsAction.setText("Firmware ...").setIcon(Icon::Emblem::Binary).onActivate([&] {
+  firmwareSettingsAction.setText("Firmware" ELLIPSIS).setIcon(Icon::Emblem::Binary).onActivate([&] {
     settingsWindow.show("Firmware");
   });
-  pathSettingsAction.setText("Paths ...").setIcon(Icon::Emblem::Folder).onActivate([&] {
+  pathSettingsAction.setText("Paths" ELLIPSIS).setIcon(Icon::Emblem::Folder).onActivate([&] {
     settingsWindow.show("Paths");
   });
-  driverSettingsAction.setText("Drivers ...").setIcon(Icon::Place::Settings).onActivate([&] {
+  driverSettingsAction.setText("Drivers" ELLIPSIS).setIcon(Icon::Place::Settings).onActivate([&] {
     settingsWindow.show("Drivers");
   });
 
@@ -137,9 +143,12 @@ Presentation::Presentation() {
   manifestViewerAction.setText("Manifest").setIcon(Icon::Emblem::Binary).onActivate([&] {
     toolsWindow.show("Manifest");
   });
+  #if !defined(PLATFORM_MACOS)
+  // Cocoa hiro is missing the hex editor widget
   memoryEditorAction.setText("Memory").setIcon(Icon::Device::Storage).onActivate([&] {
     toolsWindow.show("Memory");
   });
+  #endif
   graphicsViewerAction.setText("Graphics").setIcon(Icon::Emblem::Image).onActivate([&] {
     toolsWindow.show("Graphics");
   });
@@ -154,9 +163,8 @@ Presentation::Presentation() {
   });
 
   helpMenu.setText("Help");
-  aboutAction.setText("About ...").setIcon(Icon::Prompt::Question).onActivate([&] {
-    image logo{Resource::Ares::Logo};
-    logo.shrink();
+  aboutAction.setText("About" ELLIPSIS).setIcon(Icon::Prompt::Question).onActivate([&] {
+    multiFactorImage logo(Resource::Ares::Logo1x, Resource::Ares::Logo2x);
     AboutDialog()
     .setName(ares::Name)
     .setLogo(logo)
@@ -175,6 +183,12 @@ Presentation::Presentation() {
       program.load(emulator, filenames.first());
     }
   });
+    
+  Application::onOpenFile([&](auto filename) {
+    if(auto emulator = program.identify(filename)) {
+      program.load(emulator, filename);
+    }
+  });
 
   iconLayout.setCollapsible();
 
@@ -182,9 +196,13 @@ Presentation::Presentation() {
     viewport.doDrop(filenames);
   });
 
-  image icon{Resource::Ares::Icon};
+  multiFactorImage icon(Resource::Ares::Icon1x, Resource::Ares::Icon2x);
   icon.alphaBlend(0x000000);
   iconCanvas.setCollapsible().setIcon(icon).setDroppable().onDrop([&](auto filenames) {
+    viewport.doDrop(filenames);
+  });
+
+  iconPadding.setCollapsible().setColor({0, 0, 0}).setDroppable().onDrop([&](auto filenames) {
     viewport.doDrop(filenames);
   });
 
@@ -206,6 +224,7 @@ Presentation::Presentation() {
 
   resizeWindow();
   setTitle({ares::Name, " v", ares::Version});
+  setAssociatedFile();
   setBackgroundColor({0, 0, 0});
   setAlignment(Alignment::Center);
   setVisible();
@@ -219,7 +238,7 @@ Presentation::Presentation() {
 }
 
 auto Presentation::resizeWindow() -> void {
-  if(fullScreen()) return;
+  if(fullScreen()) setFullScreen(false);
   if(maximized()) setMaximized(false);
 
   u32 multiplier = max(2, settings.video.multiplier);
@@ -282,9 +301,8 @@ auto Presentation::loadEmulators() -> void {
       auto entry = settings.recent.game[index];
       auto system = entry.split(";", 1L)(0);
       auto location = entry.split(";", 1L)(1);
-      if(directory::exists(location)) item.setIcon(Icon::Action::Open);
-      if(file::exists(location)) item.setIcon(Icon::Emblem::File);
-      item.setText(Location::prefix(location));
+      item.setIconForFile(location);
+      item.setText(Location::base(location).trimRight("/"));
       item.onActivate([=] {
         for(auto& emulator : emulators) {
           if(emulator->name == system) {
@@ -297,7 +315,11 @@ auto Presentation::loadEmulators() -> void {
       recentGames.append(MenuSeparator());
       MenuItem clearHistory{&recentGames};
       clearHistory.setIcon(Icon::Edit::Clear);
+      #if !defined(PLATFORM_MACOS)
       clearHistory.setText("Clear History");
+      #else
+      clearHistory.setText("Clear Menu");
+      #endif
       clearHistory.onActivate([&] {
         for(u32 index : range(9)) settings.recent.game[index] = {};
         loadEmulators();
@@ -316,7 +338,7 @@ auto Presentation::loadEmulators() -> void {
 
     MenuItem item;
     item.setIcon(Icon::Place::Server);
-    item.setText({emulator->name, " ..."});
+    item.setText({emulator->name, ELLIPSIS});
     item.setVisible(emulator->configuration.visible);
     item.onActivate([=] {
       program.load(emulator);
@@ -345,13 +367,15 @@ auto Presentation::loadEmulators() -> void {
     //if the user disables every system, give an indication for how to re-add systems to the load menu
     MenuItem item{&loadMenu};
     item.setIcon(Icon::Action::Add);
-    item.setText("Add Systems ...");
+    item.setText("Add Systems" ELLIPSIS);
     item.onActivate([&] {
       settingsWindow.show("Emulators");
     });
   }
+    
+  #if !defined(PLATFORM_MACOS)
   loadMenu.append(MenuSeparator());
-
+    
   { MenuItem quit{&loadMenu};
     quit.setIcon(Icon::Action::Quit);
     quit.setText("Quit");
@@ -359,11 +383,12 @@ auto Presentation::loadEmulators() -> void {
       program.quit();
     });
   }
+  #endif
 }
 
 auto Presentation::loadEmulator() -> void {
   setTitle(emulator->root->game());
-
+  setAssociatedFile(emulator->game->location);
   systemMenu.setText(emulator->name);
   systemMenu.setVisible();
 
@@ -374,6 +399,9 @@ auto Presentation::loadEmulator() -> void {
 
   u32 portsFound = 0;
   for(auto port : ares::Node::enumerate<ares::Node::Port>(emulator->root)) {
+    //do not add unsupported ports to the port menu
+    if(emulator->portBlacklist.find(port->name())) continue;
+
     if(!port->hotSwappable()) continue;
     if(port->type() != "Controller" && port->type() != "Expansion") continue;
 
@@ -435,7 +463,7 @@ auto Presentation::loadEmulator() -> void {
 
 auto Presentation::unloadEmulator(bool reloading) -> void {
   setTitle({ares::Name, " v", ares::Version});
-
+  setAssociatedFile();
   systemMenu.setVisible(false);
   systemMenu.reset();
 

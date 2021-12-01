@@ -9,6 +9,7 @@ struct M68000 {
   virtual auto wait(u32 clocks) -> void = 0;
   virtual auto read(n1 upper, n1 lower, n24 address, n16 data = 0) -> n16 = 0;
   virtual auto write(n1 upper, n1 lower, n24 address, n16 data) -> void = 0;
+  virtual auto lockable() -> bool { return true; }
 
   auto ird() const -> n16 { return r.ird; }
 
@@ -70,8 +71,8 @@ struct M68000 {
   M68000();
   auto power() -> void;
   auto supervisor() -> bool;
-  auto exception(u32 exception, u32 vector, u32 priority = 7) -> void;
-  auto interrupt(u32 vector, u32 priority = 7) -> void;
+  auto exception(u32 exception, u32 vector, u32 priority = 0) -> void;
+  auto interrupt(u32 vector, u32 priority = 0) -> void;
 
   //registers.cpp
   struct DataRegister {

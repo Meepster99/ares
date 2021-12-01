@@ -1,7 +1,9 @@
 struct HVC_UxROM : Interface {
   static auto create(string id) -> Interface* {
-    if(id == "HVC-UNROM") return new HVC_UxROM(Revision::UNROM);
-    if(id == "HVC-UOROM") return new HVC_UxROM(Revision::UOROM);
+    if(id == "HVC-UNROM" ) return new HVC_UxROM(Revision::UNROM);
+    if(id == "HVC-UNROMA") return new HVC_UxROM(Revision::UNROMA);
+    if(id == "HVC-UN1ROM") return new HVC_UxROM(Revision::UN1ROM);
+    if(id == "HVC-UOROM" ) return new HVC_UxROM(Revision::UOROM);
     return nullptr;
   }
 
@@ -11,6 +13,8 @@ struct HVC_UxROM : Interface {
 
   enum class Revision : u32 {
     UNROM,
+    UNROMA,
+    UN1ROM,
     UOROM,
   } revision;
 
@@ -29,13 +33,18 @@ struct HVC_UxROM : Interface {
 
   auto readPRG(n32 address, n8 data) -> n8 override {
     if(address < 0x8000) return data;
-    n4 bank = (address < 0xc000 ? programBank : (n4)0xf);
+    n8 bank;
+    switch(address >> 14 & 1) {
+    case 0: bank = (revision == Revision::UNROMA ? (n8)0x00 : programBank); break;
+    case 1: bank = (revision == Revision::UNROMA ? programBank : (n8)0xff); break;
+    }
     return programROM.read(bank << 14 | (n14)address);
   }
 
   auto writePRG(n32 address, n8 data) -> void override {
     if(address < 0x8000) return;
-    programBank = data.bit(0,3);
+    programBank = data;
+    if(revision == Revision::UN1ROM) programBank >>= 2;
   }
 
   auto readCHR(n32 address, n8 data) -> n8 override {
@@ -66,5 +75,5 @@ struct HVC_UxROM : Interface {
   }
 
   n1 mirror;  //0 = horizontal, 1 = vertical
-  n4 programBank;
+  n8 programBank;
 };

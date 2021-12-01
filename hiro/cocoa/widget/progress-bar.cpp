@@ -18,19 +18,14 @@
 namespace hiro {
 
 auto pProgressBar::construct() -> void {
-  @autoreleasepool {
-    cocoaView = cocoaProgressBar = [[CocoaProgressBar alloc] initWith:self()];
-    pWidget::construct();
+  cocoaView = cocoaProgressBar = [[CocoaProgressBar alloc] initWith:self()];
+  pWidget::construct();
 
-    setPosition(state().position);
-  }
+  setPosition(state().position);
 }
 
 auto pProgressBar::destruct() -> void {
-  @autoreleasepool {
-    [cocoaView removeFromSuperview];
-    [cocoaView release];
-  }
+  [cocoaView removeFromSuperview];
 }
 
 auto pProgressBar::minimumSize() const -> Size {
@@ -38,9 +33,7 @@ auto pProgressBar::minimumSize() const -> Size {
 }
 
 auto pProgressBar::setPosition(u32 position) -> void {
-  @autoreleasepool {
-    [cocoaView setDoubleValue:position];
-  }
+  [(CocoaProgressBar*)cocoaView setDoubleValue:position];
 }
 
 }

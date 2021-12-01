@@ -13,9 +13,9 @@ struct BCD {
 };
 
 struct MSF {
-  u8 minute;      //00-99
-  u8 second;      //00-59
-  u8 frame = -1;  //00-74
+  u8 minute;        //00-99
+  u8 second;        //00-59
+  u8 frame = 0xff;  //00-74
 
   MSF() = default;
   MSF(u8 m, u8 s, u8 f) : minute(m), second(s), frame(f) {}
@@ -67,10 +67,9 @@ struct Index {
 
 struct Track {
   u8 control = 0b1111;  //4-bit
-  u8 address = 0b1111;  //4-bit
   Index indices[100];
-  u8 firstIndex = -1;
-  u8 lastIndex  = -1;
+  u8 firstIndex = 0xff;
+  u8 lastIndex  = 0xff;
 
   explicit operator bool() const {
     return (bool)indices[1];
@@ -125,27 +124,27 @@ struct Session {
   Index leadIn;       //00
   Track tracks[100];  //01-99
   Index leadOut;      //aa
-  u8 firstTrack = -1;
-  u8 lastTrack  = -1;
+  u8 firstTrack = 0xff;
+  u8 lastTrack  = 0xff;
 
   auto inLeadIn(s32 lba) const -> bool {
-    return lba < 0;
+    return leadIn && lba <= leadIn.end;
   }
 
   auto inTrack(s32 lba) const -> maybe<u8> {
-    for(u8 trackID : range(100)) {
-      auto& track = tracks[trackID];
-      if(track && track.inRange(lba)) return trackID;
+    for(u8 trackID : range(99)) {
+      auto& track = tracks[trackID+1];
+      if(track && track.inRange(lba)) return trackID+1;
     }
     return {};
   }
 
   auto inLeadOut(s32 lba) const -> bool {
-    return lba >= leadOut.lba;
+    return leadOut && lba >= leadOut.lba;
   }
 
   auto track(u8 trackID) -> maybe<Track&> {
-    if(trackID < 100 && tracks[trackID]) return tracks[trackID];
+    if(trackID >= 1 && trackID < 100 && tracks[trackID]) return tracks[trackID];
     return {};
   }
 
@@ -173,7 +172,7 @@ struct Session {
         auto& track = tracks[trackID];
         if(!track) continue;
         auto q = toQ(lba);
-        q[0] = track.control << 4 | track.address << 0;
+        q[0] = track.control << 4 | 1;
         q[1] = 0x00;
         q[2] = BCD::encode(trackID);
         auto msf = MSF(lba);
@@ -189,7 +188,8 @@ struct Session {
         q[10] = crc16 >> 8;
         q[11] = crc16 >> 0;
         if(++lba >= 0) break;
-      }}if(  lba >= 0) break;
+      } if(  lba >= 0) break;
+      } if(  lba >= 0) break;
 
       //first track
       for(u32 repeat : range(3)) {
@@ -270,7 +270,7 @@ struct Session {
           for(u32 index : range(12)) p[index] = byte;
 
           auto q = toQ(lba);
-          q[0] = track.control << 4 | track.address << 0;
+          q[0] = track.control << 4 | 1;
           q[1] = BCD::encode(trackID);
           q[2] = BCD::encode(indexID);
           auto msf = MSF(lba - track.indices[1].lba);
@@ -291,6 +291,13 @@ struct Session {
       }
     }
 
+    //pre-lead-out (2-3s at the end of last track)
+    for(auto i : range(150)) {
+      auto p = toP(leadOut.lba - 150 + i);
+      for(auto sig : range(12)) {
+        p[sig]= 0xff;
+    }}
+
     //lead-out
     for(s32 lba : range(sectors - abs(leadIn.lba) - leadOut.lba)) {
       auto p = toP(leadOut.lba + lba);
@@ -300,7 +307,7 @@ struct Session {
         byte = 0x00;
       } else {
         //2hz duty cycle; rounded downward (standard specifies 2% tolerance)
-        byte = (lba - 150) / (75 >> 1) & 1 ? 0xff : 0x00;
+        byte = (lba - 150) / (75 >> 1) & 1 ? 0x00 : 0xff;
       }
       for(u32 index : range(12)) p[index] = byte;
 
@@ -332,6 +339,7 @@ struct Session {
     if(size != 12 && size != 96 && size != 2448) return false;
 
     //determine lead-in sector count
+    leadIn.lba = InvalidLBA;
     for(s32 lba : range(7500)) {  //7500 max sectors scanned
       u32 offset = lba * size;
       if(size ==   96) offset += 12;
@@ -348,8 +356,7 @@ struct Session {
       if(address != 1) continue;
       if(trackID != 0) continue;
 
-      auto msf = MSF::fromBCD(q[3], q[4], q[5]);
-      leadIn.lba = msf.toLBA() - lba;
+      leadIn.lba = lba - 7500;
       break;
     }
     if(leadIn.lba == InvalidLBA || leadIn.lba >= 0) return false;
@@ -363,6 +370,7 @@ struct Session {
     };
 
     //lead-in
+    leadOut.lba = InvalidLBA;
     for(s32 lba = leadIn.lba; lba < 0; lba++) {
       auto q = toQ(lba);
       if(!q) break;
@@ -381,7 +389,6 @@ struct Session {
       if(trackID <=  99) {  //00-99
         auto& track = tracks[trackID];
         track.control = control;
-        track.address = address;
         track.indices[1].lba = MSF::fromBCD(q[7], q[8], q[9]).toLBA();
       }
 
@@ -412,7 +419,7 @@ struct Session {
       u8 trackID = BCD::decode(q[1]);
       u8 indexID = BCD::decode(q[2]);
       if(address != 1) continue;
-      if(trackID > 99) continue;
+      if(trackID == 0 || trackID > 99) continue;
       if(indexID > 99) continue;
 
       auto& track = tracks[trackID];
@@ -471,7 +478,6 @@ struct Session {
       if(trackID ==  lastTrack) s.append( " last");
       s.append("\n");
       s.append("    control: ", binary(track.control, 4, '0'), "\n");
-      s.append("    address: ", binary(track.address, 4, '0'), "\n");
       for(u32 indexID : range(100)) {
         auto& index = track.indices[indexID];
         if(!index) continue;

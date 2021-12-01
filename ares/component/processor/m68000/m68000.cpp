@@ -49,13 +49,14 @@ auto M68000::supervisor() -> bool {
 }
 
 auto M68000::exception(u32 exception, u32 vector, u32 priority) -> void {
+  r.stop  = false;
   idle(10);  //todo: not accurate
 
   auto pc = r.pc;
   auto sr = readSR();
 
   if(!r.s) swap(r.a[7], r.sp);
-  r.i = priority;
+  if(priority) r.i = priority;
   r.s = 1;
   r.t = 0;
 

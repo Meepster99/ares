@@ -3,18 +3,14 @@
 namespace hiro {
 
 auto pTableViewColumn::construct() -> void {
-  @autoreleasepool {
-    if(auto tableView = _parent()) {
-      [tableView->cocoaView reloadColumns];
-    }
+  if(auto tableView = _parent()) {
+    [(CocoaTableView*)(tableView->cocoaView) reloadColumns];
   }
 }
 
 auto pTableViewColumn::destruct() -> void {
-  @autoreleasepool {
-    if(auto tableView = _parent()) {
-      [tableView->cocoaView reloadColumns];
-    }
+  if(auto tableView = _parent()) {
+    [(CocoaTableView*)(tableView->cocoaView) reloadColumns];
   }
 }
 
@@ -54,15 +50,13 @@ auto pTableViewColumn::setSorting(Sort sorting) -> void {
 }
 
 auto pTableViewColumn::setText(const string& text) -> void {
-  @autoreleasepool {
-    if(auto parent = _parent()) {
-      string label = text;
-      if(state().sorting == Sort::Ascending ) label.append(" \u25b4");
-      if(state().sorting == Sort::Descending) label.append(" \u25be");
-      NSTableColumn* tableColumn = [[parent->cocoaView content] tableColumnWithIdentifier:[[NSNumber numberWithInteger:self().offset()] stringValue]];
-      [[tableColumn headerCell] setStringValue:[NSString stringWithUTF8String:label]];
-      [[parent->cocoaView headerView] setNeedsDisplay:YES];
-    }
+  if(auto parent = _parent()) {
+    string label = text;
+    if(state().sorting == Sort::Ascending ) label.append(" \u25b4");
+    if(state().sorting == Sort::Descending) label.append(" \u25be");
+    NSTableColumn* tableColumn = [[(CocoaTableView*)(parent->cocoaView) content] tableColumnWithIdentifier:[[NSNumber numberWithInteger:self().offset()] stringValue]];
+    [[tableColumn headerCell] setStringValue:[NSString stringWithUTF8String:label]];
+    [[[(CocoaTableView*)(parent->cocoaView) content] headerView] setNeedsDisplay:YES];
   }
 }
 
@@ -73,6 +67,10 @@ auto pTableViewColumn::setVisible(bool visible) -> void {
 }
 
 auto pTableViewColumn::setWidth(signed width) -> void {
+  if(auto parent = _parent()) {
+    NSTableColumn* tableColumn = [[(CocoaTableView*)(parent->cocoaView) content] tableColumnWithIdentifier:[[NSNumber numberWithInteger:self().offset()] stringValue]];
+    tableColumn.width = width;
+  }
 }
 
 auto pTableViewColumn::_parent() -> maybe<pTableView&> {

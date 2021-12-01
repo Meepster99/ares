@@ -13,6 +13,7 @@ auto VDP::read(n1 upper, n1 lower, n24 address, n16 data) -> n16 {
 
   //counters
   case 0xc00008 ... 0xc0000f: {
+    if(io.counterLatch) return state.counterLatchValue;
     auto vcounter = state.vcounter;
     if(io.interlaceMode.bit(0)) {
       if(io.interlaceMode.bit(1)) vcounter <<= 1;
@@ -140,7 +141,6 @@ auto VDP::writeDataPort(n16 data) -> void {
   command.latch = 0;
   command.ready = 1;
 
-  if(dma.mode == 2) dma.wait = 0;
   fifo.write(command.target, command.address, data);
   command.address += command.increment;
 }
@@ -175,29 +175,34 @@ auto VDP::readControlPort() -> n16 {
 
 auto VDP::writeControlPort(n16 data) -> void {
   //command write (lo)
+
+  // Note: A pending interrupt will be delayed when a register write
+  // is used to enable that interrupt. Further testing is required,
+  // but the current method should be sufficient to handle most cases.
+  // Required for Sesame Street Counting Cafe et al.
+  irq.delay = 2; // 4 pixel delay (4-6 M68k clocks) from this write
+
   if(command.latch) {
     command.latch = 0;
 
     command.address.bit(14,16) = data.bit(0,2);
     command.target.bit(2,3)    = data.bit(4,5);
     command.ready              = data.bit(6) | command.target.bit(0);
-    command.pending            = data.bit(7) & dma.enable;
+    command.pending           |= data.bit(7) & dma.enable;
 
-    if(prefetch.full()) {
-      prefetch.read(command.target, command.address);
-    }
+    prefetch.read(command.target, command.address);
 
     dma.wait = dma.mode == 2;
     dma.synchronize();
     return;
   }
 
-  command.address.bit(0,13) = data.bit(0,13);
   command.target.bit(0,1)   = data.bit(14,15);
   command.ready             = 1;
 
   //command write (hi)
   if(data.bit(14,15) != 2) {
+    command.address.bit(0,13) = data.bit(0,13);
     command.latch = 1;
     return;
   }
@@ -210,12 +215,12 @@ auto VDP::writeControlPort(n16 data) -> void {
   //mode register 1
   case 0x00: {
     io.displayOverlayEnable  = data.bit(0);
+    if(!io.counterLatch && data.bit(1)) state.counterLatchValue = read(1,1,0xC00008,0);
     io.counterLatch          = data.bit(1);
     io.videoMode4            = data.bit(2);
     irq.hblank.enable        = data.bit(4);
     io.leftColumnBlank       = data.bit(5);
 
-    irq.poll();
     if(!io.videoMode4) debug(unimplemented, "[VDP] M4=0");
     return;
   }
@@ -229,7 +234,6 @@ auto VDP::writeControlPort(n16 data) -> void {
     io.displayEnable   = data.bit(6);
     vram.mode          = data.bit(7);
 
-    irq.poll();
     if(!io.videoMode5) debug(unimplemented, "[VDP] M5=0");
     return;
   }
@@ -282,7 +286,6 @@ auto VDP::writeControlPort(n16 data) -> void {
     layers.vscrollMode  = data.bit(2);
     irq.external.enable = data.bit(3);
 
-    irq.poll();
     return;
   }
 

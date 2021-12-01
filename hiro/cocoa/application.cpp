@@ -20,14 +20,12 @@
   if(Application::state().onMain) Application::doMain();
 }
 
--(void) updateInDock:(NSTimer*)timer {
-  NSArray* windows = [NSApp windows];
-  for(u32 n = 0; n < [windows count]; n++) {
-    NSWindow* window = [windows objectAtIndex:n];
-    if([window isMiniaturized]) {
-      [window updateInDock];
-    }
-  }
+-(BOOL)application:(NSApplication*)sender openFile:(NSString*)filename {
+  BOOL isDirectory = NO;
+  [[NSFileManager defaultManager] fileExistsAtPath:filename isDirectory:&isDirectory];
+  if(isDirectory) filename = [filename stringByAppendingString:@"/"];
+  hiro::Application::doOpenFile(filename.UTF8String);
+  return YES;
 }
 
 @end
@@ -47,8 +45,6 @@ auto pApplication::modal() -> bool {
 }
 
 auto pApplication::run() -> void {
-//applicationTimer = [NSTimer scheduledTimerWithTimeInterval:0.1667 target:cocoaDelegate selector:@selector(updateInDock:) userInfo:nil repeats:YES];
-
   if(Application::state().onMain) {
     applicationTimer = [NSTimer scheduledTimerWithTimeInterval:0.0 target:cocoaDelegate selector:@selector(run:) userInfo:nil repeats:YES];
 
@@ -75,9 +71,7 @@ auto pApplication::processEvents() -> void {
     while(!Application::state().quit) {
       NSEvent* event = [NSApp nextEventMatchingMask:NSAnyEventMask untilDate:[NSDate distantPast] inMode:NSDefaultRunLoopMode dequeue:YES];
       if(event == nil) break;
-      [event retain];
       [NSApp sendEvent:event];
-      [event release];
     }
   }
 }
@@ -97,18 +91,16 @@ auto pApplication::setScreenSaver(bool screenSaver) -> void {
   //do nothing if state has not been changed
   if(screenSaver == (powerAssertion == kIOPMNullAssertionID)) return;
 
-  @autoreleasepool {
-    if(screenSaver) {
-      IOPMAssertionRelease(powerAssertion);
+  if(screenSaver) {
+    IOPMAssertionRelease(powerAssertion);
+    powerAssertion = kIOPMNullAssertionID;
+  } else {
+    string reason = {Application::state().name, " screensaver suppression"};
+    NSString* assertionName = [NSString stringWithUTF8String:reason.data()];
+    if(IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep,
+                                   kIOPMAssertionLevelOn, (__bridge CFStringRef)assertionName, &powerAssertion
+    ) != kIOReturnSuccess) {
       powerAssertion = kIOPMNullAssertionID;
-    } else {
-      string reason = {Application::state().name, " screensaver suppression"};
-      NSString* assertionName = [NSString stringWithUTF8String:reason.data()];
-      if(IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep,
-        kIOPMAssertionLevelOn, (CFStringRef)assertionName, &powerAssertion
-      ) != kIOReturnSuccess) {
-        powerAssertion = kIOPMNullAssertionID;
-      }
     }
   }
 }

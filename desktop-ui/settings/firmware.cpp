@@ -29,7 +29,7 @@ auto FirmwareSettings::refresh() -> void {
       if(file::exists(firmware.location)) {
         item.append(TableViewCell().setText(string{firmware.location}.replace(Path::user(), "~/")));
       } else {
-        item.append(TableViewCell().setText("(unset)").setForegroundColor({128, 128, 128}));
+        item.append(TableViewCell().setText("(unset)").setForegroundColor(SystemColor::PlaceholderText));
       }
     }
   }
@@ -73,6 +73,7 @@ auto FirmwareSettings::eventAssign() -> void {
       BrowserDialog dialog;
       dialog.setTitle({"Select ", name, " ", type, " (", region, ")"});
       dialog.setPath(Path::desktop());
+      dialog.setAlignment(settingsWindow);
       dialog.setFilters({"All|*"});
       if(auto location = program.openFile(dialog)) {
         firmware.location = location;

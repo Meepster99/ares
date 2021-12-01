@@ -143,7 +143,8 @@ struct Menu : sMenu {
   auto icon() const { return self().icon(); }
   auto remove(sAction action) { return self().remove(action), *this; }
   auto reset() { return self().reset(), *this; }
-  auto setIcon(const image& icon = {}) { return self().setIcon(icon), *this; }
+  auto setIcon(const multiFactorImage& icon = {}, bool forced = false) { return self().setIcon(icon, forced), *this; }
+  auto setIconForFile(const string& filename) { return self().setIconForFile(filename), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
   auto text() const { return self().text(); }
 };
@@ -162,7 +163,8 @@ struct MenuItem : sMenuItem {
   auto doActivate() const { return self().doActivate(); }
   auto icon() const { return self().icon(); }
   auto onActivate(const function<void ()>& callback = {}) { return self().onActivate(callback), *this; }
-  auto setIcon(const image& icon = {}) { return self().setIcon(icon), *this; }
+  auto setIcon(const multiFactorImage& icon = {}, bool forced = false) { return self().setIcon(icon, forced), *this; }
+  auto setIconForFile(const string& filename) { return self().setIconForFile(filename), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
   auto text() const { return self().text(); }
 };
@@ -217,7 +219,7 @@ struct Button : sButton {
   auto onActivate(const function<void ()>& callback = {}) { return self().onActivate(callback), *this; }
   auto orientation() const { return self().orientation(); }
   auto setBordered(bool bordered = true) { return self().setBordered(bordered), *this; }
-  auto setIcon(const image& icon = {}) { return self().setIcon(icon), *this; }
+  auto setIcon(const multiFactorImage& icon = {}) { return self().setIcon(icon), *this; }
   auto setOrientation(Orientation orientation = Orientation::Horizontal) { return self().setOrientation(orientation), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
   auto text() const { return self().text(); }
@@ -236,7 +238,7 @@ struct Canvas : sCanvas {
   auto setAlignment(Alignment alignment = {}) { return self().setAlignment(alignment), *this; }
   auto setColor(Color color) { return self().setColor(color), *this; }
   auto setGradient(Gradient gradient = {}) { return self().setGradient(gradient), *this; }
-  auto setIcon(const image& icon = {}) { return self().setIcon(icon), *this; }
+  auto setIcon(const multiFactorImage& icon = {}) { return self().setIcon(icon), *this; }
   auto setSize(Size size = {}) { return self().setSize(size), *this; }
   auto update() { return self().update(), *this; }
 };
@@ -254,7 +256,7 @@ struct CheckButton : sCheckButton {
   auto orientation() const { return self().orientation(); }
   auto setBordered(bool bordered = true) { return self().setBordered(bordered), *this; }
   auto setChecked(bool checked = true) { return self().setChecked(checked), *this; }
-  auto setIcon(const image& icon = {}) { return self().setIcon(icon), *this; }
+  auto setIcon(const multiFactorImage& icon = {}) { return self().setIcon(icon), *this; }
   auto setOrientation(Orientation orientation = Orientation::Horizontal) { return self().setOrientation(orientation), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
   auto text() const { return self().text(); }
@@ -280,7 +282,7 @@ struct ComboButtonItem : sComboButtonItem {
 
   auto icon() const { return self().icon(); }
   auto selected() const { return self().selected(); }
-  auto setIcon(const image& icon = {}) { return self().setIcon(icon), *this; }
+  auto setIcon(const multiFactorImage& icon = {}) { return self().setIcon(icon), *this; }
   auto setSelected() { return self().setSelected(), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
   auto text() const { return self().text(); }
@@ -309,7 +311,7 @@ struct ComboEditItem : sComboEditItem {
   DeclareSharedObject(ComboEditItem)
 
   auto icon() const { return self().icon(); }
-  auto setIcon(const image& icon = {}) { return self().setIcon(icon), *this; }
+  auto setIcon(const multiFactorImage& icon = {}) { return self().setIcon(icon), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
   auto text() const { return self().text(); }
 };
@@ -426,7 +428,7 @@ struct IconViewItem : sIconViewItem {
 
   auto icon() const { return self().icon(); }
   auto selected() const { return self().selected(); }
-  auto setIcon(const image& icon = {}) { return self().setIcon(icon), *this; }
+  auto setIcon(const multiFactorImage& icon = {}) { return self().setIcon(icon), *this; }
   auto setSelected(bool selected = true) { return self().setSelected(selected), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
   auto text() const { return self().text(); }
@@ -474,6 +476,7 @@ struct Label : sLabel {
   auto foregroundColor() const { return self().foregroundColor(); }
   auto setAlignment(Alignment alignment = {}) { return self().setAlignment(alignment), *this; }
   auto setBackgroundColor(Color color = {}) { return self().setBackgroundColor(color), *this; }
+  auto setForegroundColor(SystemColor color) { return self().setForegroundColor(color), *this; }
   auto setForegroundColor(Color color = {}) { return self().setForegroundColor(color), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
   auto text() const { return self().text(); }
@@ -493,6 +496,7 @@ struct LineEdit : sLineEdit {
   auto onChange(const function<void ()>& callback = {}) { return self().onChange(callback), *this; }
   auto setBackgroundColor(Color color = {}) { return self().setBackgroundColor(color), *this; }
   auto setEditable(bool editable = true) { return self().setEditable(editable), *this; }
+  auto setForegroundColor(SystemColor color) { return self().setForegroundColor(color), *this; }
   auto setForegroundColor(Color color = {}) { return self().setForegroundColor(color), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
   auto text() const { return self().text(); }
@@ -521,7 +525,7 @@ struct RadioButton : sRadioButton {
   auto orientation() const { return self().orientation(); }
   auto setBordered(bool bordered = true) { return self().setBordered(bordered), *this; }
   auto setChecked() { return self().setChecked(), *this; }
-  auto setIcon(const image& icon = {}) { return self().setIcon(icon), *this; }
+  auto setIcon(const multiFactorImage& icon = {}) { return self().setIcon(icon), *this; }
   auto setOrientation(Orientation orientation = Orientation::Horizontal) { return self().setOrientation(orientation), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
   auto text() const { return self().text(); }
@@ -579,7 +583,7 @@ struct TabFrameItem : sTabFrameItem {
   auto reset() { return self().reset(), *this; }
   auto selected() const { return self().selected(); }
   auto setClosable(bool closable = true) { return self().setClosable(closable), *this; }
-  auto setIcon(const image& icon = {}) { return self().setIcon(icon), *this; }
+  auto setIcon(const multiFactorImage& icon = {}) { return self().setIcon(icon), *this; }
   auto setMovable(bool movable = true) { return self().setMovable(movable), *this; }
   auto setSelected() { return self().setSelected(), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
@@ -630,7 +634,7 @@ struct TableViewColumn : sTableViewColumn {
   auto setExpandable(bool expandable = true) { return self().setExpandable(expandable), *this; }
   auto setForegroundColor(Color color = {}) { return self().setForegroundColor(color), *this; }
   auto setHorizontalAlignment(f32 alignment = 0.0) { return self().setHorizontalAlignment(alignment), *this; }
-  auto setIcon(const image& icon = {}) { return self().setIcon(icon), *this; }
+  auto setIcon(const multiFactorImage& icon = {}) { return self().setIcon(icon), *this; }
   auto setResizable(bool resizable = true) { return self().setResizable(resizable), *this; }
   auto setSorting(Sort sorting = Sort::None) { return self().setSorting(sorting), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
@@ -659,7 +663,8 @@ struct TableViewCell : sTableViewCell {
   auto setCheckable(bool checkable = true) const { return self().setCheckable(checkable), *this; }
   auto setChecked(bool checked = true) const { return self().setChecked(checked), *this; }
   auto setForegroundColor(Color color = {}) { return self().setForegroundColor(color), *this; }
-  auto setIcon(const image& icon = {}) { return self().setIcon(icon), *this; }
+  auto setForegroundColor(SystemColor color) { return self().setForegroundColor(color), *this; }
+  auto setIcon(const multiFactorImage& icon = {}) { return self().setIcon(icon), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
   auto text() const { return self().text(); }
 };
@@ -731,6 +736,7 @@ struct TableView : sTableView {
   auto setForegroundColor(Color color = {}) { return self().setForegroundColor(color), *this; }
   auto setHeadered(bool headered = true) { return self().setHeadered(headered), *this; }
   auto setSortable(bool sortable = true) { return self().setSortable(sortable), *this; }
+  auto setUsesSidebarStyle(bool usesSidebarStyle = true) { return self().setUsesSidebarStyle(usesSidebarStyle), *this; }
   auto sort() { return self().sort(), *this; }
   auto sortable() const { return self().sortable(); }
 };
@@ -783,7 +789,7 @@ struct TreeViewItem : sTreeViewItem {
   auto setChecked(bool checked = true) { return self().setChecked(checked), *this; }
   auto setExpanded(bool expanded = true) { return self().setExpanded(expanded), *this; }
   auto setForegroundColor(Color color = {}) { return self().setForegroundColor(color), *this; }
-  auto setIcon(const image& icon = {}) { return self().setIcon(icon), *this; }
+  auto setIcon(const multiFactorImage& icon = {}) { return self().setIcon(icon), *this; }
   auto setSelected() { return self().setSelected(), *this; }
   auto setText(const string& text = "") { return self().setText(text), *this; }
   auto text() const { return self().text(); }
@@ -949,6 +955,7 @@ struct Window : sWindow {
   auto setResizable(bool resizable = true) { return self().setResizable(resizable), *this; }
   auto setSize(Size size) { return self().setSize(size), *this; }
   auto setTitle(const string& title = "") { return self().setTitle(title), *this; }
+  auto setAssociatedFile(const string& filename = "") { return self().setAssociatedFile(filename), *this; }
   auto sizable() const { return self().sizable(); }
   auto statusBar() const { return self().statusBar(); }
   auto title() const { return self().title(); }

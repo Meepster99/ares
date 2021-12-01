@@ -1,6 +1,9 @@
 #if defined(Hiro_Label)
 
 @implementation CocoaLabel : NSView
+{
+  NSColor *_foregroundColor;
+}
 
 -(id) initWith:(hiro::mLabel&)labelReference {
   if(self = [super initWithFrame:NSMakeRect(0, 0, 0, 0)]) {
@@ -23,11 +26,12 @@
   }
 
   NSFont* font = hiro::pFont::create(label->font(true));
-  NSColor* color = [NSColor textColor];
-  if(auto foregroundColor = label->foregroundColor()) {
-    color = NSMakeColor(foregroundColor);
+  NSColor* color = _foregroundColor;
+  if(!color) {
+    color = NSMakeColor(hiro::SystemColor::Label);
   }
-  NSMutableParagraphStyle* paragraphStyle = [[[NSParagraphStyle defaultParagraphStyle] mutableCopy] autorelease];
+  
+  NSMutableParagraphStyle* paragraphStyle = [[NSParagraphStyle defaultParagraphStyle] mutableCopy];
   paragraphStyle.alignment = NSTextAlignmentLeft;
   paragraphStyle.lineBreakMode = NSLineBreakByClipping;
   NSDictionary* attributes = @{
@@ -117,27 +121,20 @@
   [self mouseMove:event];
 }
 
-@end
-
 namespace hiro {
 
 auto pLabel::construct() -> void {
-  @autoreleasepool {
-    cocoaView = cocoaLabel = [[CocoaLabel alloc] initWith:self()];
-    pWidget::construct();
+  cocoaView = cocoaLabel = [[CocoaLabel alloc] initWith:self()];
+  pWidget::construct();
 
-    setAlignment(state().alignment);
-    setBackgroundColor(state().backgroundColor);
-    setForegroundColor(state().foregroundColor);
-    setText(state().text);
-  }
+  setAlignment(state().alignment);
+  setBackgroundColor(state().backgroundColor);
+  setForegroundColor(state().foregroundColor);
+  setText(state().text);
 }
 
 auto pLabel::destruct() -> void {
-  @autoreleasepool {
-    [cocoaView removeFromSuperview];
-    [cocoaView release];
-  }
+  [cocoaView removeFromSuperview];
 }
 
 auto pLabel::minimumSize() const -> Size {
@@ -145,29 +142,28 @@ auto pLabel::minimumSize() const -> Size {
 }
 
 auto pLabel::setAlignment(Alignment alignment) -> void {
-  @autoreleasepool {
-    [cocoaView setNeedsDisplay:YES];
-  }
+  [cocoaView setNeedsDisplay:YES];
 }
 
 auto pLabel::setBackgroundColor(Color color) -> void {
-  @autoreleasepool {
-    [cocoaView setNeedsDisplay:YES];
-  }
+  [cocoaView setNeedsDisplay:YES];
 }
 
 auto pLabel::setForegroundColor(Color color) -> void {
-  @autoreleasepool {
-    [cocoaView setNeedsDisplay:YES];
-  }
+  ((CocoaLabel *)cocoaView)->_foregroundColor = color? NSMakeColor(color): nil;
+  [cocoaView setNeedsDisplay:YES];
+}
+
+auto pLabel::setForegroundColor(SystemColor color) -> void {
+  ((CocoaLabel *)cocoaView)->_foregroundColor = NSMakeColor(color);
+  [cocoaView setNeedsDisplay:YES];
 }
 
 auto pLabel::setText(const string& text) -> void {
-  @autoreleasepool {
-    [cocoaView setNeedsDisplay:YES];
-  }
+  [cocoaView setNeedsDisplay:YES];
 }
 
 }
 
+@end
 #endif

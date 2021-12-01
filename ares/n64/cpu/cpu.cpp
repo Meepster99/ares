@@ -79,7 +79,7 @@ auto CPU::instruction() -> void {
   if constexpr(Accuracy::CPU::Recompiler) {
     auto address = devirtualize(ipu.pc)(0);
     auto block = recompiler.block(address);
-    block->execute();
+    block->execute(*this);
   }
 
   if constexpr(Accuracy::CPU::Interpreter) {
@@ -138,7 +138,8 @@ auto CPU::power(bool reset) -> void {
   context.setMode();
 
   if constexpr(Accuracy::CPU::Recompiler) {
-    recompiler.allocator.resize(512_MiB, bump_allocator::executable | bump_allocator::zero_fill);
+    auto buffer = ares::Memory::FixedAllocator::get().acquire(512_MiB);
+    recompiler.allocator.resize(512_MiB, bump_allocator::executable | bump_allocator::zero_fill, buffer);
     recompiler.reset();
   }
 }

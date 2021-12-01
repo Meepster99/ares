@@ -1,7 +1,7 @@
 #include "../desktop-ui.hpp"
 #include "hotkeys.cpp"
 
-VirtualPort virtualPorts[2];
+VirtualPort virtualPorts[5];
 InputManager inputManager;
 
 auto InputMapping::bind() -> void {
@@ -47,7 +47,7 @@ auto InputMapping::unbind(u32 binding) -> void {
   assignments[binding] = {};
 }
 
-auto InputMapping::Binding::icon() -> image {
+auto InputMapping::Binding::icon() -> multiFactorImage {
   if(!device && deviceID) return Icon::Device::Joypad;
   if(!device) return {};
   if(device->isKeyboard()) return Icon::Device::Keyboard;

@@ -119,7 +119,7 @@ auto MegaDrive::analyze(vector<u8>& rom) -> string {
   analyzeCopyProtection(rom, hash);
 
   vector<string> devices;
-  string device = slice((const char*)&rom[0x1a0], 0, 16).trimRight(" ");
+  string device = slice((const char*)&rom[0x190], 0, 16).trimRight(" ");
   for(auto& id : device) {
     if(id == '0');  //Master System controller
     if(id == '4');  //multitap
@@ -300,6 +300,12 @@ auto MegaDrive::analyzeStorage(vector<u8>& rom, string hash) -> void {
   if(hash == "ac08551ecd4c037211fca98359efcfe7c0b048880e82a474d5c5fcd157e33592") {
     ram.mode = "lower";
     ram.size = 32768;
+  }
+
+  //Super Hydlide (Japan)
+  if(hash == "30749097096807abf67cd1f7b2392f5789f5149ee33661e6d13113396f06a121") {
+    ram.mode = "lower";
+    ram.size = 8192;
   }
 
   //M28C16

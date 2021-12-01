@@ -8,6 +8,18 @@
   alwaysinline auto stc()  { emit.byte(0xf9); }
   alwaysinline auto ret()  { emit.byte(0xc3); }
 
+  //call imm32
+  alwaysinline auto call(imm32 it) {
+    emit.byte(0xe8);
+    emit.dword(it.data);
+  }
+
+  //jmp imm32
+  alwaysinline auto jmp(imm32 it) {
+    emit.byte(0xe9);
+    emit.dword(it.data);
+  }
+
   //call reg64
   alwaysinline auto call(reg64 rt) {
     emit.rex(0, 0, 0, rt & 8);
@@ -725,9 +737,26 @@
   #define op(code) \
     emit.byte(code); \
     emit.byte(it.data);
-  alwaysinline auto jmp(imm8 it) { op(0xeb); }
-  alwaysinline auto jnz(imm8 it) { op(0x75); }
-  alwaysinline auto jz (imm8 it) { op(0x74); }
+  #define r imm8 it{resolve(l, 1, 1)}
+  alwaysinline auto jmp (imm8 it) {    op(0xeb); }
+  alwaysinline auto jmp8(label l) { r; op(0xeb); }
+  alwaysinline auto jnz (imm8 it) {    op(0x75); }
+  alwaysinline auto jnz8(label l) { r; op(0x75); }
+  alwaysinline auto jz  (imm8 it) {    op(0x74); }
+  alwaysinline auto jz8 (label l) { r; op(0x74); }
+  #undef r
+  #undef op
+
+  #define op(code) \
+    emit.byte(0x0f); \
+    emit.byte(code); \
+    emit.dword(it.data);
+  #define r imm32 it{resolve(l, 2, 4)}
+  alwaysinline auto jnz(imm32 it) {    op(0x85); }
+  alwaysinline auto jnz(label l)  { r; op(0x85); }
+  alwaysinline auto jz (imm32 it) {    op(0x84); }
+  alwaysinline auto jz (label l)  { r; op(0x84); }
+  #undef r
   #undef op
 
   //op reg8
@@ -816,4 +845,20 @@
   alwaysinline auto sets (dis8 dt) { op(0x98); }
   alwaysinline auto setz (dis8 dt) { op(0x94); }
   #undef op
+
+  //call imm64 (pseudo-op)
+  alwaysinline auto call(imm64 target, reg64 scratch) {
+    s64 dist = distance(target.data) - 5;
+    if(dist < INT32_MIN || dist > INT32_MAX) {
+      mov(scratch, target);
+      call(scratch);
+    } else {
+      call(imm32{dist});
+    }
+  }
+
+  //jmp label (pseudo-op)
+  alwaysinline auto jmp(label l) {
+    jmp(imm32{resolve(l, 1, 4)});
+  }
 //};

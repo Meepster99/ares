@@ -35,27 +35,22 @@ auto PI::power(bool reset) -> void {
   bsd2 = {};
 
   //write CIC seeds into PIF RAM so that cartridge checksum function passes
-  //d0-d7  = CIC IPL2 seed
-  //d8-d15 = CIC IPL3 seed
-  //d17    = osResetType (0 = power; 1 = reset (NMI))
-  //d18    = osVersion
-  //d19    = osRomType (0 = Gamepak; 1 = 64DD)
   string cic = cartridge.cic();
-  if(reset == 0) {
-    if(cic == "CIC-NUS-6101" || cic == "CIC-NUS-7102") ram.write<Word>(0x24, 0x00043f3f);
-    if(cic == "CIC-NUS-6102" || cic == "CIC-NUS-7101") ram.write<Word>(0x24, 0x00003f3f);
-    if(cic == "CIC-NUS-6103" || cic == "CIC-NUS-7103") ram.write<Word>(0x24, 0x0000783f);
-    if(cic == "CIC-NUS-6105" || cic == "CIC-NUS-7105") ram.write<Word>(0x24, 0x0000913f);
-    if(cic == "CIC-NUS-6106" || cic == "CIC-NUS-7106") ram.write<Word>(0x24, 0x0000853f);
-  }
+  n8 seed = 0x3f;
+  n1 version = 0;
+  if(cic == "CIC-NUS-6101" || cic == "CIC-NUS-7102") seed = 0x3f, version = 1;
+  if(cic == "CIC-NUS-6102" || cic == "CIC-NUS-7101") seed = 0x3f;
+  if(cic == "CIC-NUS-6103" || cic == "CIC-NUS-7103") seed = 0x78;
+  if(cic == "CIC-NUS-6105" || cic == "CIC-NUS-7105") seed = 0x91;
+  if(cic == "CIC-NUS-6106" || cic == "CIC-NUS-7106") seed = 0x85;
 
-  if(reset == 1) {
-    if(cic == "CIC-NUS-6101" || cic == "CIC-NUS-7102") ram.write<Word>(0x24, 0x00063f3f);
-    if(cic == "CIC-NUS-6102" || cic == "CIC-NUS-7101") ram.write<Word>(0x24, 0x00023f3f);
-    if(cic == "CIC-NUS-6103" || cic == "CIC-NUS-7103") ram.write<Word>(0x24, 0x0002783f);
-    if(cic == "CIC-NUS-6105" || cic == "CIC-NUS-7105") ram.write<Word>(0x24, 0x0002913f);
-    if(cic == "CIC-NUS-6106" || cic == "CIC-NUS-7106") ram.write<Word>(0x24, 0x0002853f);
-  }
+  n32 data;
+  data.bit(0, 7) = 0x3f;     //CIC IPL2 seed
+  data.bit(8,15) = seed;     //CIC IPL3 seed
+  data.bit(17)   = reset;    //osResetType (0 = power; 1 = reset (NMI))
+  data.bit(18)   = version;  //osVersion
+  data.bit(19)   = 0;        //osRomType (0 = Gamepak; 1 = 64DD)
+  ram.write<Word>(0x24, data);
 }
 
 }

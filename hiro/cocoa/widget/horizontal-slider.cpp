@@ -23,20 +23,15 @@
 namespace hiro {
 
 auto pHorizontalSlider::construct() -> void {
-  @autoreleasepool {
-    cocoaView = cocoaHorizontalSlider = [[CocoaHorizontalSlider alloc] initWith:self()];
-    pWidget::construct();
+  cocoaView = cocoaHorizontalSlider = [[CocoaHorizontalSlider alloc] initWith:self()];
+  pWidget::construct();
 
-    setLength(state().length);
-    setPosition(state().position);
-  }
+  setLength(state().length);
+  setPosition(state().position);
 }
 
 auto pHorizontalSlider::destruct() -> void {
-  @autoreleasepool {
-    [cocoaView removeFromSuperview];
-    [cocoaView release];
-  }
+  [cocoaView removeFromSuperview];
 }
 
 auto pHorizontalSlider::minimumSize() const -> Size {
@@ -51,15 +46,11 @@ auto pHorizontalSlider::setGeometry(Geometry geometry) -> void {
 }
 
 auto pHorizontalSlider::setLength(u32 length) -> void {
-  @autoreleasepool {
-    [cocoaView setMaxValue:length];
-  }
+  [(CocoaHorizontalSlider*)cocoaView setMaxValue:length - 1];
 }
 
 auto pHorizontalSlider::setPosition(u32 position) -> void {
-  @autoreleasepool {
-    [cocoaView setDoubleValue:position];
-  }
+  [(CocoaHorizontalSlider*)cocoaView setDoubleValue:position];
 }
 
 }

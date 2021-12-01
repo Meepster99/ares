@@ -47,6 +47,7 @@ auto VDP::serialize(serializer& s) -> void {
   s(latch.displayWidth);
   s(latch.clockSelect);
 
+  s(state.counterLatchValue);
   s(state.hcounter);
   s(state.vcounter);
   s(state.field);
@@ -73,6 +74,7 @@ auto VDP::IRQ::serialize(serializer& s) -> void {
   s(vblank.enable);
   s(vblank.pending);
   s(vblank.transitioned);
+  s(delay);
 }
 
 auto VDP::Slot::serialize(serializer& s) -> void {
@@ -161,11 +163,11 @@ auto VDP::Sprite::serialize(serializer& s) -> void {
   s(cache);
   s(mappings);
   s(mappingCount);
-  s(patternX);
+  s(maskCheck);
+  s(maskActive);
   s(patternIndex);
   s(patternSlice);
   s(patternCount);
-  s(patternStop);
   s(visible);
   s(visibleLink);
   s(visibleCount);

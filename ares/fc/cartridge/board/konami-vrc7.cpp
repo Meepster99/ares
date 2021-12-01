@@ -16,6 +16,7 @@ struct KonamiVRC7 : Interface {
     Interface::load(programRAM, "save.ram");
     Interface::load(characterROM, "character.rom");
     Interface::load(characterRAM, "character.ram");
+    pinA0 = 1 << pak->attribute("pinout/a0").natural();
 
     stream = cartridge.node->append<Node::Audio::Stream>("YM2413");
     stream->setChannels(1);
@@ -71,6 +72,7 @@ struct KonamiVRC7 : Interface {
 
   auto readPRG(n32 address, n8 data) -> n8 override {
     if(address < 0x6000) return data;
+    if(address < 0x8000 && !programRAM) return data;
     if(address < 0x8000) return programRAM.read(address);
 
     n8 bank;
@@ -86,29 +88,34 @@ struct KonamiVRC7 : Interface {
 
   auto writePRG(n32 address, n8 data) -> void override {
     if(address < 0x6000) return;
+    if(address < 0x8000 && !programRAM) return;
     if(address < 0x8000) return programRAM.write(address, data);
+
+    bool a0 = address & pinA0;
+    address &= 0xf020;
+    address |= a0;
 
     switch(address) {
     case 0x8000: programBank[0] = data; break;
-    case 0x8010: programBank[1] = data; break;
+    case 0x8001: programBank[1] = data; break;
     case 0x9000: programBank[2] = data; break;
-    case 0x9010: ym2413.address(data); break;
-    case 0x9030: ym2413.write(data); break;
+    case 0x9001: ym2413.address(data); break;
+    case 0x9021: ym2413.write(data); break;
     case 0xa000: characterBank[0] = data; break;
-    case 0xa010: characterBank[1] = data; break;
+    case 0xa001: characterBank[1] = data; break;
     case 0xb000: characterBank[2] = data; break;
-    case 0xb010: characterBank[3] = data; break;
+    case 0xb001: characterBank[3] = data; break;
     case 0xc000: characterBank[4] = data; break;
-    case 0xc010: characterBank[5] = data; break;
+    case 0xc001: characterBank[5] = data; break;
     case 0xd000: characterBank[6] = data; break;
-    case 0xd010: characterBank[7] = data; break;
+    case 0xd001: characterBank[7] = data; break;
     case 0xe000:
       if(disableFM && !data.bit(6)) ym2413.power(1);
       mirror = data.bit(0,1);
       disableFM = data.bit(6);
       ramWritable = data.bit(7);
       break;
-    case 0xe010:
+    case 0xe001:
       irqLatch = data;
       break;
     case 0xf000:
@@ -121,7 +128,7 @@ struct KonamiVRC7 : Interface {
       }
       irqLine = 0;
       break;
-    case 0xf010:
+    case 0xf001:
       irqEnable = irqAcknowledge;
       irqLine = 0;
       break;
@@ -193,4 +200,7 @@ struct KonamiVRC7 : Interface {
   i16 irqScalar;
   n1  irqLine;
   n6  divider;
+
+//unserialized:
+  n8 pinA0;
 };

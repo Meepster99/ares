@@ -44,12 +44,25 @@ auto SH2::Recompiler::emit(u32 address) -> Block* {
   push(rbp);
   push(r13);
   if constexpr(ABI::Windows) {
-    push(rsi);
-    push(rdi);
     sub(rsp, imm8(0x40));
   }
-  mov(rbx, imm64(&self.R[0]));
-  mov(rbp, imm64(&self));
+  mov(rbx, ra0);
+  mov(rbp, ra1);
+
+  auto entry = declareLabel();
+  jmp8(entry);
+
+  auto epilogue = defineLabel();
+
+  if constexpr(ABI::Windows) {
+    add(rsp, imm8(0x40));
+  }
+  pop(r13);
+  pop(rbp);
+  pop(rbx);
+  ret();
+
+  defineLabel(entry);
 
   bool hasBranched = 0;
   while(true) {
@@ -61,27 +74,10 @@ auto SH2::Recompiler::emit(u32 address) -> Block* {
     address += 2;
     if(hasBranched || (address & 0xfe) == 0) break;  //block boundary
     hasBranched = branched;
-    test(rax, rax);
-    jz(imm8(ABI::Windows ? 11 : 5));
-    if constexpr(ABI::Windows) {
-      add(rsp, imm8(0x40));
-      pop(rdi);
-      pop(rsi);
-    }
-    pop(r13);
-    pop(rbp);
-    pop(rbx);
-    ret();
+    test(al, al);
+    jnz(epilogue);
   }
-  if constexpr(ABI::Windows) {
-    add(rsp, imm8(0x40));
-    pop(rdi);
-    pop(rsi);
-  }
-  pop(r13);
-  pop(rbp);
-  pop(rbx);
-  ret();
+  jmp(epilogue);
 
   allocator.reserve(size());
   return block;
@@ -108,27 +104,27 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.B Rm,@(R0,Rn)
   case 0x04: {
-    mov(esi, Rn);
-    add(esi, R0);
-    mov(edx, Rm);
+    mov(ra1d, Rn);
+    add(ra1d, R0);
+    mov(ra2d, Rm);
     call(writeByte);
     return 0;
   }
 
   //MOV.W Rm,@(R0,Rn)
   case 0x05: {
-    mov(esi, Rn);
-    add(esi, R0);
-    mov(edx, Rm);
+    mov(ra1d, Rn);
+    add(ra1d, R0);
+    mov(ra2d, Rm);
     call(writeWord);
     return 0;
   }
 
   //MOV.L Rm,@(R0,Rn)
   case 0x06: {
-    mov(esi, Rn);
-    add(esi, R0);
-    mov(edx, Rm);
+    mov(ra1d, Rn);
+    add(ra1d, R0);
+    mov(ra2d, Rm);
     call(writeLong);
     return 0;
   }
@@ -144,8 +140,8 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.B @(R0,Rm),Rn
   case 0x0c: {
-    mov(esi, Rm);
-    add(esi, R0);
+    mov(ra1d, Rm);
+    add(ra1d, R0);
     call(readByte);
     movsx(eax, al);
     mov(Rn, eax);
@@ -154,8 +150,8 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.W @(R0,Rm),Rn
   case 0x0d: {
-    mov(esi, Rm);
-    add(esi, R0);
+    mov(ra1d, Rm);
+    add(ra1d, R0);
     call(readWord);
     movsx(eax, ax);
     mov(Rn, eax);
@@ -164,8 +160,8 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.L @(R0,Rm),Rn
   case 0x0e: {
-    mov(esi, Rm);
-    add(esi, R0);
+    mov(ra1d, Rm);
+    add(ra1d, R0);
     call(readLong);
     mov(Rn, eax);
     return 0;
@@ -173,90 +169,93 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MAC.L @Rm+,@Rn+
   case 0x0f: {
-    mov(esi, Rn);
+    auto skip = declareLabel();
+    mov(ra1d, Rn);
     addd(Rn, imm8(4));
     call(readLong);
     movsxd(rax, eax);
-    push(rax);
-    push(rax);
-    mov(esi, Rm);
+    mov(r13, rax);
+    mov(ra1d, Rm);
     addd(Rm, imm8(4));
     call(readLong);
     movsxd(rax, eax);
-    pop(rdx);
-    pop(rdx);
+    mov(rdx, r13);
     imul(rdx);
     mov(rdx, rax);
     add(rdx, MAC);
     mov(al, S);
     test(al, al);
-    jz(imm8(8));
+    jz8(skip);
     sal(rdx, imm8(16));
     sar(rdx, imm8(16));
+    defineLabel(skip);
     mov(MAC, rdx);
     return 0;
   }
 
   //MOV.L Rm,@(disp,Rn)
   case 0x10 ... 0x1f: {
-    mov(esi, Rn);
-    add(esi, imm8(d4*4));
-    mov(edx, Rm);
+    mov(ra1d, Rn);
+    add(ra1d, imm8(d4*4));
+    mov(ra2d, Rm);
     call(writeLong);
     return 0;
   }
 
   //MOV.B Rm,@Rn
   case 0x20: {
-    mov(esi, Rn);
-    mov(edx, Rm);
+    mov(ra1d, Rn);
+    mov(ra2d, Rm);
     call(writeByte);
     return 0;
   }
 
   //MOV.W Rm,@Rn
   case 0x21: {
-    mov(esi, Rn);
-    mov(edx, Rm);
+    mov(ra1d, Rn);
+    mov(ra2d, Rm);
     call(writeWord);
     return 0;
   }
 
   //MOV.L Rm,@Rn
   case 0x22: {
-    mov(esi, Rn);
-    mov(edx, Rm);
+    mov(ra1d, Rn);
+    mov(ra2d, Rm);
     call(writeLong);
     return 0;
   }
 
   //MOV.B Rm,@-Rn
   case 0x24: {
-    mov(esi, Rn);
-    dec(esi);
-    mov(Rn, esi);
-    mov(edx, Rm);
+    mov(ra1d, Rn);
+    dec(ra1d);
+    mov(r13d, ra1d);
+    mov(ra2d, Rm);
     call(writeByte);
+    mov(Rn, r13d);
     return 0;
   }
 
   //MOV.W Rm,@-Rn
   case 0x25: {
-    mov(esi, Rn);
-    sub(esi, imm8(2));
-    mov(Rn, esi);
-    mov(edx, Rm);
+    mov(ra1d, Rn);
+    sub(ra1d, imm8(2));
+    mov(r13d, ra1d);
+    mov(ra2d, Rm);
     call(writeWord);
+    mov(Rn, r13d);
     return 0;
   }
 
   //MOV.L Rm,@-Rn
   case 0x26: {
-    mov(esi, Rn);
-    sub(esi, imm8(4));
-    mov(Rn, esi);
-    mov(edx, Rm);
+    mov(ra1d, Rn);
+    sub(ra1d, imm8(4));
+    mov(r13d, ra1d);
+    mov(ra2d, Rm);
     call(writeLong);
+    mov(Rn, r13d);
     return 0;
   }
 
@@ -311,6 +310,14 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
     mov(eax, Rn);
     mov(edx, Rm);
     xor(eax, edx);
+    test(al, al);
+    setz(dl);
+    for(auto _ : range(3)) {
+      shr(eax, imm8(8));
+      test(al, al);
+      setz(al);
+      or(dl, al);
+    }
     setnz(T);
     return 0;
   }
@@ -374,6 +381,8 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //DIV1 Rm,Rn
   case 0x34: {
+    auto skip = declareLabel();
+    auto skip2 = declareLabel();
     mov(al, Q);
     mov(cl, al);
     mov(eax, Rn);
@@ -385,10 +394,12 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
     or(dl, al);
     mov(al, M);
     cmp(al, cl);
-    jnz(imm8(5));
+    jnz8(skip);
     sub(edx, Rm);
-    jmp(imm8(3));
+    jmp8(skip2);
+    defineLabel(skip);
     add(edx, Rm);
+    defineLabel(skip2);
     mov(Rn, edx);
     setc(dl);
     mov(al, Q);
@@ -482,7 +493,7 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //ADDC Rm,Rn
   case 0x3e: {
-    mov(rax, T);
+    mov(al, T);
     rcr(al);
     mov(eax, Rn);
     adc(eax, Rm);
@@ -503,34 +514,34 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MAC.W @Rm+,@Rn+
   case 0x4f: {
-    mov(esi, Rn);
+    auto skip = declareLabel();
+    mov(ra1d, Rn);
     addd(Rn, imm8(2));
     call(readWord);
     movsx(eax, ax);
-    push(rax);
-    push(rax);
-    mov(esi, Rm);
+    mov(r13d, eax);
+    mov(ra1d, Rm);
     addd(Rm, imm8(2));
     call(readWord);
     movsx(eax, ax);
-    pop(rdx);
-    pop(rdx);
+    mov(edx, r13d);
     imul(edx);
     shl(rdx, imm8(32));
-    or(edx, eax);
+    or(rdx, rax);
     add(rdx, MAC);
     mov(al, S);
     test(al, al);
-    jz(imm8(3));
+    jz8(skip);
     movsxd(rdx, edx);
+    defineLabel(skip);
     mov(MAC, rdx);
     return 0;
   }
 
   //MOV.L @(disp,Rm),Rn
   case 0x50 ... 0x5f: {
-    mov(esi, Rm);
-    add(esi, imm8(d4*4));
+    mov(ra1d, Rm);
+    add(ra1d, imm8(d4*4));
     call(readLong);
     mov(Rn, eax);
     return 0;
@@ -538,7 +549,7 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.B @Rm,Rn
   case 0x60: {
-    mov(esi, Rm);
+    mov(ra1d, Rm);
     call(readByte);
     movsx(eax, al);
     mov(Rn, eax);
@@ -547,7 +558,7 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.W @Rm,Rn
   case 0x61: {
-    mov(esi, Rm);
+    mov(ra1d, Rm);
     call(readWord);
     movsx(eax, ax);
     mov(Rn, eax);
@@ -556,7 +567,7 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.L @Rm,Rn
   case 0x62: {
-    mov(esi, Rm);
+    mov(ra1d, Rm);
     call(readLong);
     mov(Rn, eax);
     return 0;
@@ -571,7 +582,7 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.B @Rm+,Rn
   case 0x64: {
-    mov(esi, Rm);
+    mov(ra1d, Rm);
     if(n != m) addd(Rm, imm8(1));
     call(readByte);
     movsx(eax, al);
@@ -581,7 +592,7 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.W @Rm+,Rn
   case 0x65: {
-    mov(esi, Rm);
+    mov(ra1d, Rm);
     if(n != m) addd(Rm, imm8(2));
     call(readWord);
     movsx(eax, ax);
@@ -591,7 +602,7 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.L @Rm+,Rn
   case 0x66: {
-    mov(esi, Rm);
+    mov(ra1d, Rm);
     if(n != m) addd(Rm, imm8(4));
     call(readLong);
     mov(Rn, eax);
@@ -629,14 +640,14 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //NEGC Rm,Rn
   case 0x6a: {
-    xor(edx, edx);
-    sub(edx, Rm);
     mov(al, T);
     and(eax, imm8(1));
-    sub(edx, eax);
-    mov(Rn, edx);
-    setc(al);
-    mov(T, al);
+    mov(edx, Rm);
+    add(eax, edx);
+    neg(eax);
+    mov(Rn, eax);
+    or(eax, edx);
+    setnz(T);
     return 0;
   }
 
@@ -691,8 +702,8 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.W @(disp,PC),Rn
   case 0x90 ... 0x9f: {
-    mov(esi, PC);
-    add(esi, imm32(d8*2));
+    mov(ra1d, PC);
+    add(ra1d, imm32(d8*2));
     call(readWord);
     movsx(eax, ax);
     mov(Rn, eax);
@@ -701,28 +712,28 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //BRA disp
   case 0xa0 ... 0xaf: {
-    mov(esi, PC);
-    add(esi, imm32(4 + (i12)d12 * 2));
-    mov(PPC, esi);
+    mov(eax, PC);
+    add(eax, imm32(4 + (i12)d12 * 2));
+    mov(PPC, eax);
     movb(PPM, imm8(Branch::Slot));
     return 1;
   }
 
   //BSR disp
   case 0xb0 ... 0xbf: {
-    mov(esi, PC);
-    mov(PR, esi);
-    add(esi, imm32(4 + (i12)d12 * 2));
-    mov(PPC, esi);
+    mov(eax, PC);
+    mov(PR, eax);
+    add(eax, imm32(4 + (i12)d12 * 2));
+    mov(PPC, eax);
     movb(PPM, imm8(Branch::Slot));
     return 1;
   }
 
   //MOV.L @(disp,PC),Rn
   case 0xd0 ... 0xdf: {
-    mov(esi, PC);
-    and(esi, imm8(~3));
-    add(esi, imm32(d8*4));
+    mov(ra1d, PC);
+    and(ra1d, imm8(~3));
+    add(ra1d, imm32(d8*4));
     call(readLong);
     mov(Rn, eax);
     return 0;
@@ -756,26 +767,26 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.B R0,@(disp,Rn)
   case 0x80: {
-    mov(esi, Rm);
-    add(esi, imm8(d4));
-    mov(edx, R0);
+    mov(ra1d, Rm);
+    add(ra1d, imm8(d4));
+    mov(ra2d, R0);
     call(writeByte);
     return 0;
   }
 
   //MOV.W R0,@(disp,Rn)
   case 0x81: {
-    mov(esi, Rm);
-    add(esi, imm8(d4*2));
-    mov(edx, R0);
+    mov(ra1d, Rm);
+    add(ra1d, imm8(d4*2));
+    mov(ra2d, R0);
     call(writeWord);
     return 0;
   }
 
   //MOV.B @(disp,Rn),R0
   case 0x84: {
-    mov(esi, Rm);
-    add(esi, imm8(d4));
+    mov(ra1d, Rm);
+    add(ra1d, imm8(d4));
     call(readByte);
     movsx(eax, al);
     mov(R0, eax);
@@ -784,8 +795,8 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.W @(disp,Rn),R0
   case 0x85: {
-    mov(esi, Rm);
-    add(esi, imm8(d4*2));
+    mov(ra1d, Rm);
+    add(ra1d, imm8(d4*2));
     call(readWord);
     movsx(eax, ax);
     mov(R0, eax);
@@ -802,75 +813,83 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //BT disp
   case 0x89: {
+    auto skip = declareLabel();
     mov(al, T);
     test(al, al);
-    jz(imm8(16));
-    mov(esi, PC);
-    add(esi, imm32(4 + (s8)d8 * 2));
-    mov(PPC, esi);
+    jz8(skip);
+    mov(eax, PC);
+    add(eax, imm32(4 + (s8)d8 * 2));
+    mov(PPC, eax);
     movb(PPM, imm8(Branch::Take));
+    defineLabel(skip);
     return 1;
   }
 
   //BF disp
   case 0x8b: {
+    auto skip = declareLabel();
     mov(al, T);
     test(al, al);
-    jnz(imm8(16));
-    mov(esi, PC);
-    add(esi, imm32(4 + (s8)d8 * 2));
-    mov(PPC, esi);
+    jnz8(skip);
+    mov(eax, PC);
+    add(eax, imm32(4 + (s8)d8 * 2));
+    mov(PPC, eax);
     movb(PPM, imm8(Branch::Take));
+    defineLabel(skip);
     return 1;
   }
 
   //BT/S disp
   case 0x8d: {
+    auto skip = declareLabel();
     mov(al, T);
     test(al, al);
-    jz(imm8(16));
-    mov(esi, PC);
-    add(esi, imm32(4 + (s8)d8 * 2));
-    mov(PPC, esi);
+    jz8(skip);
+    mov(eax, PC);
+    add(eax, imm32(4 + (s8)d8 * 2));
+    mov(PPC, eax);
     movb(PPM, imm8(Branch::Slot));
+    defineLabel(skip);
     return 1;
   }
 
   //BF/S disp
   case 0x8f: {
+    auto skip = declareLabel();
     mov(al, T);
     test(al, al);
-    jnz(imm8(16));
-    mov(esi, PC);
-    add(esi, imm32(4 + (s8)d8 * 2));
-    mov(PPC, esi);
+    jnz8(skip);
+    mov(eax, PC);
+    add(eax, imm32(4 + (s8)d8 * 2));
+    mov(PPC, eax);
     movb(PPM, imm8(Branch::Slot));
+    defineLabel(skip);
     return 1;
   }
 
   //MOV.B R0,@(disp,GBR)
   case 0xc0: {
-    mov(esi, GBR);
-    add(esi, imm32(d8));
-    mov(edx, R0);
+    mov(ra1d, GBR);
+    add(ra1d, imm32(d8));
+    mov(ra2d, R0);
     call(writeByte);
     return 0;
   }
 
   //MOV.W R0,@(disp,GBR)
   case 0xc1: {
-    mov(esi, GBR);
-    add(esi, imm32(d8*2));
-    mov(edx, R0);
+    mov(ra1d, GBR);
+    add(ra1d, imm32(d8*2));
+    mov(ra2d, R0);
     call(writeWord);
     return 0;
   }
 
   //MOV.L R0,@(disp,GBR)
   case 0xc2: {
-    mov(esi, GBR);
-    add(esi, imm32(d8*4));
-    mov(edx, R0);
+    mov(ra1d, GBR);
+    add(ra1d, imm32(d8*4));
+    mov(ra2d, R0);
     call(writeLong);
     return 0;
   }
@@ -893,16 +912,18 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
     mov(al, M);
     shl(eax, imm8(9));
     or(edx, eax);
-    mov(esi, R15);
+    mov(ra2d, edx);
+    mov(ra1d, R15);
     addd(R15, imm8(4));
     call(writeLong);
     mov(edx, PC);
     add(edx, imm8(2));
-    mov(esi, R15);
+    mov(ra2d, edx);
+    mov(ra1d, R15);
     addd(R15, imm8(4));
     call(writeLong);
-    mov(esi, VBR);
-    add(esi, imm32(i * 4));
+    mov(ra1d, VBR);
+    add(ra1d, imm32(i * 4));
     call(readLong);
     add(eax, imm8(4));
     mov(PPC, eax);
@@ -912,8 +933,8 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.B @(disp,GBR),R0
   case 0xc4: {
-    mov(esi, GBR);
-    add(esi, imm32(d8));
+    mov(ra1d, GBR);
+    add(ra1d, imm32(d8));
     call(readByte);
     movsx(eax, al);
     mov(R0, eax);
@@ -922,8 +943,8 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.W @(disp,GBR),R0
   case 0xc5: {
-    mov(esi, GBR);
-    add(esi, imm32(d8*2));
+    mov(ra1d, GBR);
+    add(ra1d, imm32(d8*2));
     call(readWord);
     movsx(eax, ax);
     mov(R0, eax);
@@ -932,25 +953,27 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //MOV.L @(disp,GBR),R0
   case 0xc6: {
-    mov(esi, GBR);
-    add(esi, imm32(d8*4));
+    mov(ra1d, GBR);
+    add(ra1d, imm32(d8*4));
     call(readLong);
-    mov(R0, rax);
+    mov(R0, eax);
     return 0;
   }
 
   //MOVA @(disp,PC),R0
   case 0xc7: {
+    auto skip = declareLabel();
     mov(eax, PC);
     and(al, imm8(~3));
     add(eax, imm32(d8*4));
     mov(R0, eax);
     mov(eax, PPM);
     test(eax, eax);
-    jz(imm8(7));
+    jz8(skip);
     mov(eax, R0);
     sub(eax, imm8(2));
     mov(R0, eax);
+    defineLabel(skip);
     return 0;
   }
 
@@ -988,8 +1011,8 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //TST.B #imm,@(R0,GBR)
   case 0xcc: {
-    mov(esi, GBR);
-    add(esi, R0);
+    mov(ra1d, GBR);
+    add(ra1d, R0);
     call(readByte);
     and(al, imm8(i));
     setz(T);
@@ -998,39 +1021,39 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //AND.B #imm,@(R0,GBR)
   case 0xcd: {
-    mov(esi, GBR);
-    add(esi, R0);
+    mov(ra1d, GBR);
+    add(ra1d, R0);
     call(readByte);
     and(al, imm8(i));
-    mov(edx, eax);
-    mov(esi, GBR);
-    add(esi, R0);
+    mov(ra2d, eax);
+    mov(ra1d, GBR);
+    add(ra1d, R0);
     call(writeByte);
     return 0;
   }
 
   //XOR.B #imm,@(R0,GBR)
   case 0xce: {
-    mov(esi, GBR);
-    add(esi, R0);
+    mov(ra1d, GBR);
+    add(ra1d, R0);
     call(readByte);
     xor(al, imm8(i));
-    mov(edx, eax);
-    mov(esi, GBR);
-    add(esi, R0);
+    mov(ra2d, eax);
+    mov(ra1d, GBR);
+    add(ra1d, R0);
     call(writeByte);
     return 0;
   }
 
   //OR.B #imm,@(R0,GBR)
   case 0xcf: {
-    mov(esi, GBR);
-    add(esi, R0);
+    mov(ra1d, GBR);
+    add(ra1d, R0);
     call(readByte);
     or(al, imm8(i));
-    mov(edx, eax);
-    mov(esi, GBR);
-    add(esi, R0);
+    mov(ra2d, eax);
+    mov(ra1d, GBR);
+    add(ra1d, R0);
     call(writeByte);
     return 0;
   }
@@ -1052,6 +1075,8 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //STC SR,Rn
   case 0x002: {
+    auto skip = declareLabel();
+    auto skip2 = declareLabel();
     xor(edx, edx);
     xor(eax, eax);
     mov(al, T);
@@ -1064,23 +1089,25 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
     or(dl, al);
     mov(al, Q);
     test(al, al);
-    jz(imm8(6));
+    jz8(skip);
     or(edx, imm32(0x100));
+    defineLabel(skip);
     mov(al, M);
     test(al, al);
-    jz(imm8(6));
+    jz8(skip2);
     or(edx, imm32(0x200));
+    defineLabel(skip2);
     mov(Rn, edx);
     return 0;
   }
 
   //BSRF Rm
   case 0x003: {
-    mov(esi, PC);
-    mov(PR, esi);
-    add(esi, Rm);
-    add(esi, imm8(4));
-    mov(PPC, esi);
+    mov(eax, PC);
+    mov(PR, eax);
+    add(eax, Rm);
+    add(eax, imm8(4));
+    mov(PPC, eax);
     movb(PPM, imm8(Branch::Slot));
     return 1;
   }
@@ -1115,10 +1142,10 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //BRAF Rm
   case 0x023: {
-    mov(esi, PC);
-    add(esi, Rm);
-    add(esi, imm8(4));
-    mov(PPC, esi);
+    mov(eax, PC);
+    add(eax, Rm);
+    add(eax, imm8(4));
+    mov(PPC, eax);
     movb(PPM, imm8(Branch::Slot));
     return 1;
   }
@@ -1162,16 +1189,18 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //STS.L MACH,@-Rn
   case 0x402: {
-    mov(esi, Rn);
-    sub(esi, imm8(4));
-    mov(Rn, esi);
-    mov(edx, MACH);
+    mov(ra1d, Rn);
+    sub(ra1d, imm8(4));
+    mov(Rn, ra1d);
+    mov(ra2d, MACH);
     call(writeLong);
     return 0;
   }
 
   //STC.L SR,@-Rn
   case 0x403: {
+    auto skip = declareLabel();
+    auto skip2 = declareLabel();
     xor(edx, edx);
     xor(eax, eax);
     mov(al, T);
@@ -1184,15 +1213,18 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
     or(dl, al);
     mov(al, Q);
     test(al, al);
-    jz(imm8(6));
+    jz8(skip);
     or(edx, imm32(0x100));
+    defineLabel(skip);
     mov(al, M);
     test(al, al);
-    jz(imm8(6));
+    jz8(skip2);
     or(edx, imm32(0x200));
-    mov(esi, Rn);
-    sub(esi, imm8(4));
-    mov(Rn, esi);
+    defineLabel(skip2);
+    mov(ra2d, edx);
+    mov(ra1d, Rn);
+    sub(ra1d, imm8(4));
+    mov(Rn, ra1d);
     call(writeLong);
     return 0;
   }
@@ -1221,16 +1253,16 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //LDS.L @Rm+,MACH
   case 0x406: {
-    mov(esi, Rn);
+    mov(ra1d, Rn);
     addd(Rn, imm8(4));
     call(readLong);
-    mov(MACH, rax);
+    mov(MACH, eax);
     return 0;
   }
 
   //LDC.L @Rm+,SR
   case 0x407: {
-    mov(esi, Rn);
+    mov(ra1d, Rn);
     addd(Rn, imm8(4));
     call(readLong);
     mov(edx, eax);
@@ -1280,11 +1312,11 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //JSR @Rm
   case 0x40b: {
-    mov(esi, PC);
-    mov(PR, esi);
-    mov(esi, Rm);
-    add(esi, imm8(4));
-    mov(PPC, esi);
+    mov(eax, PC);
+    mov(PR, eax);
+    mov(eax, Rm);
+    add(eax, imm8(4));
+    mov(PPC, eax);
     movb(PPM, imm8(Branch::Slot));
     return 1;
   }
@@ -1334,20 +1366,20 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //STS.L MACL,@-Rn
   case 0x412: {
-    mov(esi, Rn);
-    sub(esi, imm8(4));
-    mov(Rn, esi);
-    mov(edx, MACL);
+    mov(ra1d, Rn);
+    sub(ra1d, imm8(4));
+    mov(Rn, ra1d);
+    mov(ra2d, MACL);
     call(writeLong);
     return 0;
   }
 
   //STC.L GBR,@-Rn
   case 0x413: {
-    mov(esi, Rn);
-    sub(esi, imm8(4));
-    mov(Rn, esi);
-    mov(edx, GBR);
+    mov(ra1d, Rn);
+    sub(ra1d, imm8(4));
+    mov(Rn, ra1d);
+    mov(ra2d, GBR);
     call(writeLong);
     return 0;
   }
@@ -1362,7 +1394,7 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //LDS.L @Rm+,MACL
   case 0x416: {
-    mov(esi, Rm);
+    mov(ra1d, Rm);
     addd(Rm, imm8(4));
     call(readLong);
     mov(MACL, eax);
@@ -1371,7 +1403,7 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //LDS.L @Rm+,GBR
   case 0x417: {
-    mov(esi, Rm);
+    mov(ra1d, Rm);
     addd(Rm, imm8(4));
     call(readLong);
     mov(GBR, eax);
@@ -1403,9 +1435,9 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //TAS @Rn
   case 0x41b: {
-    mov(esi, Rn);
-    and(esi, imm32(0x1fff'ffff));
-    or(esi, imm32(0x2000'0000));
+    mov(ra1d, Rn);
+    and(ra1d, imm32(0x1fff'ffff));
+    or(ra1d, imm32(0x2000'0000));
     call(readByte);
     mov(cl, al);
     test(al, al);
@@ -1413,10 +1445,10 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
     mov(T, al);
     mov(al, cl);
     or(al, imm8(0x80));
-    mov(edx, eax);
-    mov(esi, Rn);
-    and(esi, imm32(0x1fff'ffff));
-    or(esi, imm32(0x2000'0000));
+    mov(ra2d, eax);
+    mov(ra1d, Rn);
+    and(ra1d, imm32(0x1fff'ffff));
+    or(ra1d, imm32(0x2000'0000));
     call(writeByte);
     return 0;
   }
@@ -1452,20 +1484,20 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //STS.L PR,@-Rn
   case 0x422: {
-    mov(esi, Rn);
-    sub(esi, imm8(4));
-    mov(Rn, esi);
-    mov(edx, PR);
+    mov(ra1d, Rn);
+    sub(ra1d, imm8(4));
+    mov(Rn, ra1d);
+    mov(ra2d, PR);
     call(writeLong);
     return 0;
   }
 
   //STC.L VBR,@-Rn
   case 0x423: {
-    mov(esi, Rn);
-    sub(esi, imm8(4));
-    mov(Rn, esi);
-    mov(edx, VBR);
+    mov(ra1d, Rn);
+    sub(ra1d, imm8(4));
+    mov(Rn, ra1d);
+    mov(ra2d, VBR);
     call(writeLong);
     return 0;
   }
@@ -1504,7 +1536,7 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //LDS.L @Rm+,PR
   case 0x426: {
-    mov(esi, Rm);
+    mov(ra1d, Rm);
     addd(Rm, imm8(4));
     call(readLong);
     mov(PR, eax);
@@ -1513,7 +1545,7 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //LDC.L @Rm+,VBR
   case 0x427: {
-    mov(esi, Rm);
+    mov(ra1d, Rm);
     addd(Rm, imm8(4));
     call(readLong);
     mov(VBR, eax);
@@ -1545,9 +1577,9 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //JMP @Rm
   case 0x42b: {
-    mov(esi, Rm);
-    add(esi, imm8(4));
-    mov(PPC, esi);
+    mov(eax, Rm);
+    add(eax, imm8(4));
+    mov(PPC, eax);
     movb(PPM, imm8(Branch::Slot));
     return 1;
   }
@@ -1581,9 +1613,9 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //RTS
   case 0x000b: {
-    mov(esi, PR);
-    add(esi, imm8(4));
-    mov(PPC, esi);
+    mov(eax, PR);
+    add(eax, imm8(4));
+    mov(PPC, eax);
     movb(PPM, imm8(Branch::Slot));
     return 1;
   }
@@ -1606,12 +1638,16 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //SLEEP
   case 0x001b: {
+    auto skip = declareLabel();
+    auto skip2 = declareLabel();
     mov(eax, ET);
     test(al, al);
-    jnz(imm8(6));
+    jnz8(skip);
     subd(PC, imm8(2));
-    jmp(imm8(4));
+    jmp8(skip2);
+    defineLabel(skip);
     movb(ET, imm8(0));
+    defineLabel(skip2);
     return 1;
   }
 
@@ -1624,12 +1660,12 @@ auto SH2::Recompiler::emitInstruction(u16 opcode) -> bool {
 
   //RTE
   case 0x002b: {
-    mov(esi, R15);
+    mov(ra1d, R15);
     addd(R15, imm8(4));
     call(readLong);
     mov(PPC, eax);
     movb(PPM, imm8(Branch::Slot));
-    mov(esi, R15);
+    mov(ra1d, R15);
     addd(R15, imm8(4));
     call(readLong);
     mov(edx, eax);

@@ -21,6 +21,7 @@
 using nall::any;
 using nall::function;
 using nall::image;
+using nall::multiFactorImage;
 using nall::Locale;
 using nall::maybe;
 using nall::nothing;
@@ -99,6 +100,7 @@ enum class Orientation : u32 { Horizontal, Vertical };
 enum class Navigation : u32 { Top, Bottom, Left, Right };
 enum class Sort : u32 { None, Ascending, Descending };
 
+#include "system-color.hpp"
 #include "color.hpp"
 #include "gradient.hpp"
 #include "alignment.hpp"

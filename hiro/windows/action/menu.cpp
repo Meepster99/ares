@@ -19,7 +19,7 @@ auto pMenu::remove(sAction action) -> void {
   _synchronize();
 }
 
-auto pMenu::setIcon(const image& icon) -> void {
+auto pMenu::setIcon(const image& icon, bool force) -> void {
   _createBitmap();
   _synchronize();
 }
@@ -33,7 +33,7 @@ auto pMenu::_createBitmap() -> void {
 
   if(auto icon = state().icon) {
     icon.alphaBlend(GetSysColor(COLOR_MENU));  //Windows does not alpha blend menu icons properly (leaves black outline)
-    icon.scale(GetSystemMetrics(SM_CXMENUCHECK), GetSystemMetrics(SM_CYMENUCHECK), Interpolation::Linear);
+    icon.scale(GetSystemMetrics(SM_CXMENUCHECK), GetSystemMetrics(SM_CYMENUCHECK));
     hbitmap = CreateBitmap(icon);
   }
 }

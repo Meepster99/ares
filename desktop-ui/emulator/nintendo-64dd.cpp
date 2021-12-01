@@ -15,7 +15,7 @@ Nintendo64DD::Nintendo64DD() {
 
   firmware.append({"BIOS", "Japan"});
 
-  for(auto id : range(2)) {
+  for(auto id : range(4)) {
     InputPort port{string{"Controller Port ", 1 + id}};
 
   { InputDevice device{"Gamepad"};
@@ -76,7 +76,16 @@ auto Nintendo64DD::load() -> bool {
     port->allocate("Gamepad");
     port->connect();
   }
+  
+  if(auto port = root->find<ares::Node::Port>("Controller Port 3")) {
+    port->allocate("Gamepad");
+    port->connect();
+  }
 
+  if(auto port = root->find<ares::Node::Port>("Controller Port 4")) {
+    port->allocate("Gamepad");
+    port->connect();
+  }
   return true;
 }
 

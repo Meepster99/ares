@@ -77,7 +77,8 @@ endif
 
 # build optimization levels
 ifeq ($(build),debug)
-  flags += -Og -g -DBUILD_DEBUG
+  symbols = true
+  flags += -Og -DBUILD_DEBUG
 else ifeq ($(build),stable)
   lto = true
   flags += -O1 -DBUILD_STABLE
@@ -92,6 +93,17 @@ else ifeq ($(build),optimized)
   flags += -O3 -fomit-frame-pointer -DBUILD_OPTIMIZED
 else
   $(error unrecognized build type.)
+endif
+
+# debugging information
+ifeq ($(symbols),true)
+  flags += -g
+  ifeq ($(platform),windows)
+    ifeq ($(findstring clang++,$(compiler)),clang++)
+      flags   += -gcodeview
+      options += -Wl,-pdb=
+    endif
+  endif
 endif
 
 # link-time optimization
@@ -126,6 +138,7 @@ endif
 # windows settings
 ifeq ($(platform),windows)
   options += -mthreads -lpthread -lws2_32 -lole32
+  options += $(if $(findstring clang++,$(compiler)),-fuse-ld=lld)
   options += $(if $(findstring g++,$(compiler)),-static -static-libgcc -static-libstdc++)
   options += $(if $(findstring true,$(console)),-mconsole,-mwindows)
   windres := windres
@@ -133,11 +146,13 @@ endif
 
 # macos settings
 ifeq ($(platform),macos)
-  flags   += -stdlib=libc++
-  options += -lc++ -lobjc
+  flags   += -stdlib=libc++ -mmacosx-version-min=10.9 -Wno-auto-var-id -fobjc-arc
+  options += -lc++ -lobjc -mmacosx-version-min=10.9
+  # allow mprotect() on dynamic recompiler code blocks
+  options += -Wl,-segprot,__DATA,rwx,rw
   ifneq ($(local),true)
-    flags   += -mmacosx-version-min=10.14 -arch x86_64
-    options += -mmacosx-version-min=10.14 -arch x86_64
+    flags   += -arch x86_64
+    options += -arch x86_64
   endif
 endif
 

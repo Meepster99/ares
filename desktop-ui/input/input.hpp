@@ -15,7 +15,7 @@ struct InputMapping {
   string assignments[BindingLimit];
 
   struct Binding {
-    auto icon() -> image;
+    auto icon() -> multiFactorImage;
     auto text() -> string;
 
     shared_pointer<HID::Device> device;
@@ -197,5 +197,5 @@ struct InputManager {
   u64 lastPoll = 0;
 };
 
-extern VirtualPort virtualPorts[2];
+extern VirtualPort virtualPorts[5];
 extern InputManager inputManager;

@@ -68,6 +68,9 @@ all: $(all.objects)
 	$(info Linking $(output.path)/$(name) ...)
 	+@$(compiler) -o $(output.path)/$(name) $(all.objects) $(all.options)
 ifeq ($(platform),macos)
+# Apply workaround for buggy linker in Xcode < 11.4.1
+	@$(compiler) -o $(output.path)/macos-fix-jit macos-fix-jit.cpp
+	$(output.path)/macos-fix-jit $(output.path)/$(name)
 	rm -rf $(output.path)/$(name).app
 	mkdir -p $(output.path)/$(name).app/Contents/MacOS/
 	mkdir -p $(output.path)/$(name).app/Contents/Resources/
@@ -101,12 +104,12 @@ else ifeq ($(platform),macos)
 else ifneq ($(filter $(platform),linux bsd),)
 	mkdir -p $(prefix)/bin/
 	mkdir -p $(prefix)/share/applications/
-	mkdir -p $(prefix)/share/icons/
+	mkdir -p $(prefix)/share/icons/hicolor/256x256/apps/
 	mkdir -p $(prefix)/share/$(name)/Shaders/
 	cp $(output.path)/$(name) $(prefix)/bin/$(name)
 	cp -R $(ares.path)/Shaders/* $(prefix)/share/$(name)/Shaders/
 	cp resource/$(name).desktop $(prefix)/share/applications/$(name).desktop
-	cp resource/$(name).png $(prefix)/share/icons/$(name).png
+	cp resource/$(name).png $(prefix)/share/icons/hicolor/256x256/apps/$(name).png
 endif
 
 uninstall:
@@ -118,7 +121,7 @@ else ifeq ($(platform),macos)
 else ifneq ($(filter $(platform),linux bsd),)
 	rm -f $(prefix)/bin/$(name)
 	rm -f $(prefix)/share/applications/$(name).desktop
-	rm -f $(prefix)/share/icons/$(name).png
+	rm -f $(prefix)/share/icons/hicolor/256x256/apps/$(name).png
 endif
 
 -include $(object.path)/*.d
